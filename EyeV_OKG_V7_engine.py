@@ -197,6 +197,10 @@ class OKGEngine:
                         continue
                     if feature_id == "OF072" and not self._neuro_ophthalmology_context(q):
                         continue
+                    if feature_id == "OF074" and not self._iris_anterior_segment_context(q):
+                        continue
+                    if feature_id == "OF075" and not self._iris_red_flag_context(q):
+                        continue
                     matched_terms.append(term)
 
             if matched_terms:
@@ -996,6 +1000,8 @@ class OKGEngine:
                 or "no new referral indicated" in text
                 or ("under hes" in text and ("optic nerve" in text or "disc" in text))
             ),
+            "OF074": lambda text: self._iris_anterior_segment_context(text),
+            "OF075": lambda text: self._iris_red_flag_context(text),
         }
 
         for feature_id, matcher in fallback_patterns.items():
@@ -1211,6 +1217,49 @@ class OKGEngine:
         )
         return pain_context and visual_pathway_context
 
+    def _iris_anterior_segment_context(self, normalised_text):
+        phrases = (
+            "raised iris",
+            "raised on the iris",
+            "raised on iris",
+            "elevated iris",
+            "iris lesion",
+            "iris lump",
+            "iris nodule",
+            "iris mass",
+            "iris cyst",
+            "iris naevus",
+            "iris nevus",
+            "pigmented iris lesion",
+            "iris pigmentation",
+            "iris abnormality",
+        )
+        if any(phrase in normalised_text and not self.is_negated(normalised_text, phrase) for phrase in phrases):
+            return True
+        return bool(re.search(r"\braised\b.{0,30}\biris\b", normalised_text))
+
+    def _iris_red_flag_context(self, normalised_text):
+        if not ("iris" in normalised_text or "angle" in normalised_text or "anterior chamber" in normalised_text):
+            return False
+
+        phrases = (
+            "rubeosis",
+            "iris neovascularisation",
+            "iris neovascularization",
+            "new vessels on iris",
+            "hyphaema",
+            "hyphema",
+            "irregular pupil",
+            "distorted pupil",
+            "angle involvement",
+            "angle closure",
+            "secondary glaucoma",
+            "raised iop",
+            "high iop",
+            "painful red eye",
+        )
+        return any(phrase in normalised_text and not self.is_negated(normalised_text, phrase) for phrase in phrases)
+
     def _field_term_is_glaucoma_context(self, normalised_text, term):
         if term not in {"field defect", "visual field defect", "field loss"}:
             return False
@@ -1380,6 +1429,52 @@ class OKGEngine:
 
         return self._outcome("OUT001", "No high-risk safety condition and no graph escalation")
 
+    def draft_response(self, result):
+        outcome = result.get("Outcome Recommendation", {})
+        outcome_id = outcome.get("Outcome ID", "")
+        presentations = result.get("Presentation Ranking", [])
+        top_presentation_id = presentations[0]["Presentation ID"] if presentations else ""
+        missing_info = result.get("Missing Information", [])
+
+        if top_presentation_id == "PR054":
+            return {
+                "Summary": "This looks like a raised iris / anterior segment lesion query, but the graph does not have enough information to advise safely.",
+                "Suggested response": (
+                    "Please provide an anterior-segment/slit-lamp photograph if available, laterality, size, location, colour/pigmentation, "
+                    "whether the lesion is vascular or changing, VA, IOP, pupil shape/reaction, anterior chamber activity, angle findings, "
+                    "and whether there is pain, redness, photophobia, hyphaema or rubeosis."
+                ),
+                "Safety net": "If there is pain, red eye, reduced vision, high IOP, rubeosis/new iris vessels, hyphaema, pupil distortion or rapid change, use the urgent local pathway.",
+            }
+
+        if top_presentation_id == "PR055":
+            return {
+                "Summary": "This query contains iris/anterior-segment red-flag features.",
+                "Suggested response": "Convert or escalate according to the local urgent anterior-segment pathway.",
+                "Safety net": "Document VA, IOP, pupil, anterior chamber/angle findings and attach anterior-segment imaging if available.",
+            }
+
+        if outcome_id == "OUT003":
+            return {
+                "Summary": "The graph has identified features that may need urgent assessment.",
+                "Suggested response": "Convert or escalate according to the relevant local urgent ophthalmology pathway.",
+                "Safety net": "Check and document symptom onset, VA, laterality, red-flag symptoms and relevant examination findings.",
+            }
+
+        if outcome_id == "OUT002":
+            info = ", ".join(item["Missing Information"] for item in missing_info) if missing_info else "clear clinical details, key symptoms, VA, laterality, relevant examination findings and images/OCT/photos where available"
+            return {
+                "Summary": "The graph needs more information before giving advice.",
+                "Suggested response": f"Please provide: {info}.",
+                "Safety net": "If there are new severe symptoms, reduced vision, pain, red eye, neurological symptoms or other red flags, use the relevant urgent pathway rather than waiting for advice.",
+            }
+
+        return {
+            "Summary": "The graph did not identify a high-risk presentation from the supplied text.",
+            "Suggested response": "Return advice only if the referrer has provided enough clinical detail and no red flags are present.",
+            "Safety net": "Advise re-contact or urgent referral if symptoms worsen or red-flag symptoms develop.",
+        }
+
     def _outcome(self, outcome_id, rationale):
         row = self.entities[self.entities["Entity ID"] == outcome_id]
         if not row.empty:
@@ -1399,13 +1494,21 @@ class OKGEngine:
         top_safety = safety[0] if safety else None
         missing_info = self.missing_information(top_presentation)
         outcome = self.recommend_outcome(top_presentation, top_safety, missing_info)
+        if not top_presentation and not detected_features and query.strip():
+            missing_info = [{
+                "Missing Information ID": "MI000",
+                "Missing Information": "Recognisable clinical problem, key symptoms, laterality, VA and relevant examination findings",
+            }]
+            outcome = self._outcome(
+                "OUT002",
+                "No recognised graph features in a non-empty clinical query",
+            )
         if not top_presentation and detected_features and outcome["Outcome ID"] == "OUT001":
             outcome = self._outcome(
                 "OUT002",
                 "Recognised clinical features but no confident graph presentation",
             )
-
-        return {
+        result = {
             "Query": query,
             "Detected Features": detected_features,
             "Presentation Ranking": presentations,
@@ -1418,6 +1521,8 @@ class OKGEngine:
                 "Engine Version": "EyeV OKG V7.0 locked baseline",
             },
         }
+        result["Draft Response"] = self.draft_response(result)
+        return result
 
     def print_report(self, result):
         print("=" * 70)

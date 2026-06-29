@@ -80,6 +80,19 @@ def render_outcome(outcome):
     )
 
 
+def render_draft_response(draft):
+    if not draft:
+        return
+
+    with st.container(border=True):
+        st.markdown("**Summary**")
+        st.write(draft.get("Summary", ""))
+        st.markdown("**Suggested response**")
+        st.write(draft.get("Suggested response", ""))
+        st.markdown("**Safety net**")
+        st.write(draft.get("Safety net", ""))
+
+
 def render_features(features):
     if not features:
         st.info("No clinical features detected.")
@@ -166,6 +179,9 @@ def main():
 
         st.subheader("Outcome recommendation")
         render_outcome(result["Outcome Recommendation"])
+
+        st.subheader("Draft response")
+        render_draft_response(result.get("Draft Response"))
 
         col1, col2 = st.columns(2)
         with col1:
