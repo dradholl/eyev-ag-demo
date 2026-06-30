@@ -1,8 +1,12 @@
 """Streamlit demo app for the EyeV A&G reasoning engine."""
 
+from datetime import datetime
+import json
 from pathlib import Path
+from urllib.request import Request, urlopen
 
 import streamlit as st
+from google.oauth2.service_account import Credentials
 
 from EyeV_OKG_V7_engine import OKGEngine
 
@@ -22,6 +26,26 @@ EXAMPLES = [
     "Known optic disc drusen and pseudopapilloedema stable with no symptoms and no new referral indicated.",
     "Pain on eye movements with reduced colour vision and central visual field defect, no red eye.",
     "Referral ID cannot be found and patient has not heard anything about triage.",
+]
+
+SHEET_COLUMNS = [
+    "Timestamp",
+    "Question",
+    "Outcome ID",
+    "Outcome",
+    "Outcome rationale",
+    "Top presentation ID",
+    "Top presentation",
+    "Top presentation confidence",
+    "Safety IDs",
+    "Safety conditions",
+    "Detected feature IDs",
+    "Detected features",
+    "Missing information IDs",
+    "Missing information",
+    "Draft summary",
+    "Draft suggested response",
+    "Draft safety net",
 ]
 
 
@@ -56,6 +80,117 @@ def check_password():
 @st.cache_resource
 def load_engine():
     return OKGEngine(str(GRAPH_FILE))
+
+
+def logging_mode():
+    if st.secrets.get("GOOGLE_APPS_SCRIPT_URL", ""):
+        return "apps_script"
+    if st.secrets.get("GOOGLE_SHEET_ID", "") and st.secrets.get("GOOGLE_SERVICE_ACCOUNT", None):
+        return "service_account"
+    return "not_configured"
+
+
+@st.cache_resource
+def load_google_sheet():
+    sheet_id = st.secrets.get("GOOGLE_SHEET_ID", "")
+    worksheet_name = st.secrets.get("GOOGLE_WORKSHEET_NAME", "A&G Log")
+    service_account_info = st.secrets.get("GOOGLE_SERVICE_ACCOUNT", None)
+
+    if not sheet_id or not service_account_info:
+        return None
+
+    import gspread
+
+    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+    credentials = Credentials.from_service_account_info(
+        dict(service_account_info),
+        scopes=scopes,
+    )
+    client = gspread.authorize(credentials)
+    spreadsheet = client.open_by_key(sheet_id)
+
+    try:
+        worksheet = spreadsheet.worksheet(worksheet_name)
+    except gspread.WorksheetNotFound:
+        worksheet = spreadsheet.add_worksheet(title=worksheet_name, rows=1000, cols=len(SHEET_COLUMNS))
+
+    values = worksheet.row_values(1)
+    if values != SHEET_COLUMNS:
+        worksheet.update("A1:Q1", [SHEET_COLUMNS])
+
+    return worksheet
+
+
+def append_with_apps_script(row):
+    url = st.secrets.get("GOOGLE_APPS_SCRIPT_URL", "")
+    if not url:
+        return False
+
+    payload = {
+        "token": st.secrets.get("GOOGLE_LOG_TOKEN", ""),
+        "headers": SHEET_COLUMNS,
+        "row": row,
+    }
+    request = Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urlopen(request, timeout=20) as response:
+        body = json.loads(response.read().decode("utf-8"))
+    if not body.get("ok"):
+        raise RuntimeError(body.get("error", "Google Apps Script logging failed"))
+    return True
+
+
+def join_values(items, key):
+    return "; ".join(str(item.get(key, "")) for item in items if item.get(key, ""))
+
+
+def result_to_sheet_row(question, result):
+    outcome = result.get("Outcome Recommendation", {})
+    presentations = result.get("Presentation Ranking", [])
+    top_presentation = presentations[0] if presentations else {}
+    draft = result.get("Draft Response", {})
+
+    return [
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        question,
+        outcome.get("Outcome ID", ""),
+        outcome.get("Outcome", ""),
+        outcome.get("Rationale", ""),
+        top_presentation.get("Presentation ID", ""),
+        top_presentation.get("Presentation", ""),
+        top_presentation.get("Confidence", ""),
+        join_values(result.get("Safety Ranking", []), "Safety Condition ID"),
+        join_values(result.get("Safety Ranking", []), "Safety Condition"),
+        join_values(result.get("Detected Features", []), "Feature ID"),
+        join_values(result.get("Detected Features", []), "Feature"),
+        join_values(result.get("Missing Information", []), "Missing Information ID"),
+        join_values(result.get("Missing Information", []), "Missing Information"),
+        draft.get("Summary", ""),
+        draft.get("Suggested response", ""),
+        draft.get("Safety net", ""),
+    ]
+
+
+def log_to_google_sheet(question, result):
+    row = result_to_sheet_row(question, result)
+
+    if st.secrets.get("GOOGLE_APPS_SCRIPT_URL", ""):
+        append_with_apps_script(row)
+        return "logged"
+
+    worksheet = load_google_sheet()
+    if worksheet is None:
+        return "not_configured"
+
+    worksheet.append_row(
+        row,
+        value_input_option="USER_ENTERED",
+    )
+    return "logged"
 
 
 def outcome_colour(outcome_id):
@@ -163,6 +298,15 @@ def main():
         st.divider()
         st.subheader("Deployment note")
         st.write("For public demo links, set an app password and use synthetic or anonymised cases only.")
+        st.divider()
+        st.subheader("Logging")
+        mode = logging_mode()
+        if mode == "apps_script":
+            st.success("Google Sheet logging configured")
+        elif mode == "service_account":
+            st.success("Google Sheet logging configured")
+        else:
+            st.info("Google Sheet logging not configured")
 
     default_text = selected_example or EXAMPLES[0]
     question = st.text_area("A&G request text", value=default_text, height=180)
@@ -176,6 +320,11 @@ def main():
             return
 
         result = engine.analyse(cleaned)
+        log_status = "not_configured"
+        try:
+            log_status = log_to_google_sheet(cleaned, result)
+        except Exception as exc:
+            st.warning(f"Google Sheet logging failed: {exc}")
 
         st.subheader("Outcome recommendation")
         render_outcome(result["Outcome Recommendation"])
@@ -199,6 +348,11 @@ def main():
 
         with st.expander("Audit"):
             st.json(result["Audit"])
+
+        if log_status == "logged":
+            st.success("Logged to Google Sheet.")
+        elif log_status == "not_configured":
+            st.info("Google Sheet logging is not configured yet.")
 
 
 if __name__ == "__main__":
