@@ -263,6 +263,118 @@ def enforce_safe_review_outcome(result):
     return result
 
 
+def has_glaucoma_drop_adherence_context(question, result):
+    text = question.lower()
+    feature_ids = {feature.get("Feature ID", "") for feature in result.get("Detected Features", [])}
+    return (
+        "OF019" in feature_ids
+        or (
+            ("glaucoma drop" in text or "glaucoma drops" in text or "iop" in text or "iops" in text)
+            and (
+                "not been consistent" in text
+                or "hasnt been consistent" in text
+                or "hasn't been consistent" in text
+                or "difficult" in text
+                or "minims" in text
+                or "adherence" in text
+                or "compliance" in text
+                or "instilling" in text
+            )
+        )
+    )
+
+
+def apply_glaucoma_drop_advice(question, result):
+    if not has_glaucoma_drop_adherence_context(question, result):
+        return result
+
+    outcome = result.get("Outcome Recommendation", {})
+    if outcome.get("Outcome ID") == "OUT001":
+        result["Outcome Recommendation"] = {
+            "Outcome ID": "OUT002",
+            "Outcome": "Return to referrer for more information",
+            "Rationale": "Glaucoma drop adherence / IOP asymmetry query needs treatment and monitoring details before advice.",
+        }
+
+    existing_missing = {
+        item.get("Missing Information", "")
+        for item in result.get("Missing Information", [])
+    }
+    additions = [
+        ("MI010", "IOP values, timing, method and whether drops were used before measurement"),
+        ("MI015", "Current glaucoma drop name, prescribed frequency, adherence and instillation difficulty"),
+        ("MI012", "Optic disc/OCT/visual field status, reliability and progression"),
+        ("MI061", "Current HES/glaucoma follow-up status and whether the patient has new symptoms"),
+    ]
+    result.setdefault("Missing Information", [])
+    for missing_id, text in additions:
+        if text not in existing_missing:
+            result["Missing Information"].append({
+                "Missing Information ID": missing_id,
+                "Missing Information": text,
+            })
+
+    result["Draft Response"] = {
+        "Summary": "This appears to be a glaucoma drop adherence / IOP review query.",
+        "Suggested response": (
+            "Please confirm the glaucoma drop name, prescribed frequency, actual adherence, whether the patient can instil the drops reliably, "
+            "IOP measurement method and timing, whether drops were used before the IOP check, optic disc/OCT and visual-field status, and current HES/glaucoma follow-up. "
+            "If this is mainly an instillation difficulty, consider practical support such as supervised technique review, a compliance aid/drop dispenser, carer support, "
+            "or liaising with the glaucoma/HES team if treatment change or adherence support is needed."
+        ),
+        "Safety net": (
+            "If IOP is very high, there is eye pain/redness, corneal haze, halos, nausea/vomiting, sudden vision loss, or marked progression/symptoms, "
+            "use the urgent local glaucoma/ophthalmology pathway."
+        ),
+    }
+    return result
+
+
+def ensure_draft_response(question, result):
+    if result.get("Draft Response"):
+        return result
+
+    outcome = result.get("Outcome Recommendation", {})
+    missing_info = result.get("Missing Information", [])
+    presentations = result.get("Presentation Ranking", [])
+    top = presentations[0] if presentations else {}
+
+    if outcome.get("Outcome ID") == "OUT002":
+        info = ", ".join(item.get("Missing Information", "") for item in missing_info if item.get("Missing Information"))
+        if not info:
+            info = "clinical question, laterality, VA, symptom duration, relevant positive/negative symptoms, examination findings and images/OCT/photos where available"
+        result["Draft Response"] = {
+            "Summary": "More information is needed before final advice can be given.",
+            "Suggested response": f"Please provide: {info}.",
+            "Safety net": "If there are urgent symptoms or red flags, use the relevant urgent pathway rather than waiting for advice.",
+        }
+    elif outcome.get("Outcome ID") == "OUT003":
+        result["Draft Response"] = {
+            "Summary": "The graph has identified a potentially urgent presentation.",
+            "Suggested response": "Convert or escalate according to the relevant local urgent ophthalmology pathway.",
+            "Safety net": "Document onset, VA, laterality, symptoms and relevant examination findings.",
+        }
+    else:
+        presentation_text = top.get("Presentation", "the supplied information")
+        result["Draft Response"] = {
+            "Summary": f"The graph suggests this can be handled as advice-only based on {presentation_text}.",
+            "Suggested response": (
+                "Return advice only if the supplied information is complete and there are no red flags. "
+                "If key clinical details are missing, request those details before issuing final advice."
+            ),
+            "Safety net": "Advise urgent re-contact/referral if symptoms worsen or red-flag symptoms develop.",
+        }
+
+    return result
+
+
+def prepare_result_for_display(question, result):
+    result = enforce_safe_review_outcome(result)
+    result = apply_glaucoma_drop_advice(question, result)
+    result = ensure_draft_response(question, result)
+    return result
+
+
 def result_to_sheet_row(question, result):
     outcome = result.get("Outcome Recommendation", {})
     presentations = result.get("Presentation Ranking", [])
@@ -596,7 +708,7 @@ def main():
             return
 
         result = engine.analyse(cleaned)
-        result = enforce_safe_review_outcome(result)
+        result = prepare_result_for_display(cleaned, result)
         log_status = "not_configured"
         try:
             log_status = log_to_google_sheet(cleaned, result)
