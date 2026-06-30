@@ -60,6 +60,46 @@ SHEET_COLUMNS = [
     "Draft safety net",
 ]
 
+REVIEW_QUEUE_COLUMNS = [
+    "Timestamp",
+    "Question",
+    "Needs clinician review",
+    "Review reason",
+    "Review status",
+    "Reviewer category",
+    "Outcome ID",
+    "Outcome",
+    "Top presentation ID",
+    "Top presentation",
+    "Detected feature IDs",
+    "Detected features",
+    "Missing information",
+    "Draft suggested response",
+    "Clinician reviewer",
+    "Clinician response",
+    "Clinician outcome",
+    "Reviewer notes",
+    "Graph update needed",
+]
+
+GRAPH_CANDIDATE_COLUMNS = [
+    "Candidate timestamp",
+    "Source question",
+    "Candidate status",
+    "Candidate reason",
+    "Reviewer category",
+    "Proposed change type",
+    "Proposed new feature",
+    "Proposed new presentation",
+    "Proposed missing info",
+    "Proposed safety condition",
+    "Proposed validation case",
+    "Clinician response",
+    "Approval decision",
+    "Approved by",
+    "Implementation notes",
+]
+
 
 def a1_column_name(column_number):
     name = ""
@@ -143,15 +183,16 @@ def load_google_sheet():
     return worksheet
 
 
-def append_with_apps_script(row):
+def append_with_apps_script(sheets):
     url = st.secrets.get("GOOGLE_APPS_SCRIPT_URL", "")
     if not url:
         return False
 
     payload = {
         "token": st.secrets.get("GOOGLE_LOG_TOKEN", ""),
-        "headers": SHEET_COLUMNS,
-        "row": row,
+        "headers": sheets[0]["headers"] if sheets else [],
+        "row": sheets[0]["row"] if sheets else [],
+        "sheets": sheets,
     }
     request = Request(
         url,
@@ -190,6 +231,36 @@ def clinician_review_flags(result):
     if needs_more_info and missing_info:
         return "Optional", "More information requested by graph", "Awaiting referrer information", "Existing pathway"
     return "No", "Graph produced a covered pathway", "Not required", "Existing pathway"
+
+
+def enforce_safe_review_outcome(result):
+    needs_review, reason, _status, _category = clinician_review_flags(result)
+    outcome = result.get("Outcome Recommendation", {})
+
+    if needs_review == "Yes" and outcome.get("Outcome ID") == "OUT001":
+        result["Outcome Recommendation"] = {
+            "Outcome ID": "OUT002",
+            "Outcome": "Return to referrer for more information / clinician review",
+            "Rationale": f"Clinician review required: {reason}",
+        }
+
+    if needs_review == "Yes" and not result.get("Missing Information"):
+        result["Missing Information"] = [{
+            "Missing Information ID": "MI000",
+            "Missing Information": "Clinical problem, laterality, VA, symptom duration, relevant positive/negative symptoms, examination findings and images/photos/OCT where available",
+        }]
+
+    if needs_review == "Yes" and not result.get("Draft Response"):
+        result["Draft Response"] = {
+            "Summary": "This topic is not yet covered confidently by the structured EyeV graph.",
+            "Suggested response": (
+                "This requires clinician review before final advice. Please provide the clinical question, laterality, VA, symptom duration, "
+                "key positive and negative symptoms, relevant examination findings and images/photos/OCT where available."
+            ),
+            "Safety net": "If there is pain, reduced vision, red eye, rapidly worsening symptoms, neurological symptoms or other red flags, use the relevant urgent pathway.",
+        }
+
+    return result
 
 
 def result_to_sheet_row(question, result):
@@ -233,11 +304,91 @@ def result_to_sheet_row(question, result):
     ]
 
 
-def log_to_google_sheet(question, result):
+def result_to_review_queue_row(question, result):
+    outcome = result.get("Outcome Recommendation", {})
+    presentations = result.get("Presentation Ranking", [])
+    top_presentation = presentations[0] if presentations else {}
+    draft = result.get("Draft Response", {})
+    needs_review, review_reason, review_status, reviewer_category = clinician_review_flags(result)
+
+    return [
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        question,
+        needs_review,
+        review_reason,
+        review_status,
+        reviewer_category,
+        outcome.get("Outcome ID", ""),
+        outcome.get("Outcome", ""),
+        top_presentation.get("Presentation ID", ""),
+        top_presentation.get("Presentation", ""),
+        join_values(result.get("Detected Features", []), "Feature ID"),
+        join_values(result.get("Detected Features", []), "Feature"),
+        join_values(result.get("Missing Information", []), "Missing Information"),
+        draft.get("Suggested response", ""),
+        "",
+        "",
+        "",
+        "",
+        "",
+    ]
+
+
+def result_to_graph_candidate_row(question, result):
+    draft = result.get("Draft Response", {})
+    needs_review, review_reason, _review_status, reviewer_category = clinician_review_flags(result)
+    proposed_change_type = "New pathway" if reviewer_category == "New topic" else "Synonym/pathway review"
+
+    return [
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        question,
+        "Pending clinician review",
+        review_reason,
+        reviewer_category,
+        proposed_change_type,
+        "",
+        "",
+        "",
+        "",
+        "",
+        draft.get("Suggested response", ""),
+        "",
+        "",
+        "",
+    ]
+
+
+def build_logging_payloads(question, result):
     row = result_to_sheet_row(question, result)
+    sheets = [
+        {
+            "name": "A&G Log",
+            "headers": SHEET_COLUMNS,
+            "row": row,
+        }
+    ]
+
+    needs_review, _reason, _status, _category = clinician_review_flags(result)
+    if needs_review == "Yes":
+        sheets.append({
+            "name": "Clinician Review Queue",
+            "headers": REVIEW_QUEUE_COLUMNS,
+            "row": result_to_review_queue_row(question, result),
+        })
+        sheets.append({
+            "name": "Graph Update Candidates",
+            "headers": GRAPH_CANDIDATE_COLUMNS,
+            "row": result_to_graph_candidate_row(question, result),
+        })
+
+    return sheets
+
+
+def log_to_google_sheet(question, result):
+    sheets = build_logging_payloads(question, result)
 
     if st.secrets.get("GOOGLE_APPS_SCRIPT_URL", ""):
-        append_with_apps_script(row)
+        append_with_apps_script(sheets)
         return "logged"
 
     worksheet = load_google_sheet()
@@ -245,10 +396,57 @@ def log_to_google_sheet(question, result):
         return "not_configured"
 
     worksheet.append_row(
-        row,
+        sheets[0]["row"],
         value_input_option="USER_ENTERED",
     )
     return "logged"
+
+
+def diagnostic_log_row():
+    return [
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "DIAGNOSTIC TEST - Streamlit to Google Sheet logging",
+        "No",
+        "Diagnostic test row",
+        "Not required",
+        "System test",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "TEST",
+        "Diagnostic logging test",
+        "Manual sidebar test",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "Diagnostic test",
+        "If this row appears, Streamlit can write to the Google Sheet.",
+        "",
+    ]
+
+
+def run_logging_diagnostic():
+    if not st.secrets.get("GOOGLE_APPS_SCRIPT_URL", ""):
+        return "Google Apps Script URL is not configured in Streamlit secrets."
+
+    append_with_apps_script([{
+        "name": "A&G Log",
+        "headers": SHEET_COLUMNS,
+        "row": diagnostic_log_row(),
+    }])
+    return "Diagnostic row sent to Google Sheet."
 
 
 def outcome_colour(outcome_id):
@@ -380,6 +578,12 @@ def main():
         else:
             st.info("Google Sheet logging not configured")
 
+        if st.button("Test Google Sheet logging"):
+            try:
+                st.success(run_logging_diagnostic())
+            except Exception as exc:
+                st.error(f"Logging test failed: {exc}")
+
     default_text = selected_example or EXAMPLES[0]
     question = st.text_area("A&G request text", value=default_text, height=180)
 
@@ -392,11 +596,17 @@ def main():
             return
 
         result = engine.analyse(cleaned)
+        result = enforce_safe_review_outcome(result)
         log_status = "not_configured"
         try:
             log_status = log_to_google_sheet(cleaned, result)
         except Exception as exc:
             st.warning(f"Google Sheet logging failed: {exc}")
+
+        if log_status == "logged":
+            st.success("Logged to Google Sheet.")
+        elif log_status == "not_configured":
+            st.info("Google Sheet logging is not configured yet.")
 
         st.subheader("Outcome recommendation")
         render_outcome(result["Outcome Recommendation"])
@@ -421,11 +631,6 @@ def main():
 
         with st.expander("Audit"):
             st.json(result["Audit"])
-
-        if log_status == "logged":
-            st.success("Logged to Google Sheet.")
-        elif log_status == "not_configured":
-            st.info("Google Sheet logging is not configured yet.")
 
 
 if __name__ == "__main__":
