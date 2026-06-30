@@ -495,21 +495,23 @@ def build_logging_payloads(question, result):
             "name": "A&G Log",
             "headers": SHEET_COLUMNS,
             "row": row,
-        }
+        },
+        {
+            "name": "Clinician Review Queue",
+            "headers": REVIEW_QUEUE_COLUMNS,
+            "row": [],
+        },
+        {
+            "name": "Graph Update Candidates",
+            "headers": GRAPH_CANDIDATE_COLUMNS,
+            "row": [],
+        },
     ]
 
     needs_review, _reason, _status, _category = clinician_review_flags(result)
     if needs_review == "Yes":
-        sheets.append({
-            "name": "Clinician Review Queue",
-            "headers": REVIEW_QUEUE_COLUMNS,
-            "row": result_to_review_queue_row(question, result),
-        })
-        sheets.append({
-            "name": "Graph Update Candidates",
-            "headers": GRAPH_CANDIDATE_COLUMNS,
-            "row": result_to_graph_candidate_row(question, result),
-        })
+        sheets[1]["row"] = result_to_review_queue_row(question, result)
+        sheets[2]["row"] = result_to_graph_candidate_row(question, result)
 
     return sheets
 
