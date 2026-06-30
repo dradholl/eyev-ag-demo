@@ -30,6 +30,19 @@ EXAMPLES = [
 SHEET_COLUMNS = [
     "Timestamp",
     "Question",
+    "Needs clinician review",
+    "Review reason",
+    "Review status",
+    "Reviewer category",
+    "Clinician reviewer",
+    "Clinician response",
+    "Clinician outcome",
+    "Graph update needed",
+    "Proposed new feature",
+    "Proposed new presentation",
+    "Proposed missing info",
+    "Proposed safety condition",
+    "Validation case needed",
     "Outcome ID",
     "Outcome",
     "Outcome rationale",
@@ -148,15 +161,51 @@ def join_values(items, key):
     return "; ".join(str(item.get(key, "")) for item in items if item.get(key, ""))
 
 
+def clinician_review_flags(result):
+    outcome = result.get("Outcome Recommendation", {})
+    rationale = outcome.get("Rationale", "")
+    presentations = result.get("Presentation Ranking", [])
+    features = result.get("Detected Features", [])
+    missing_info = result.get("Missing Information", [])
+
+    no_confident_presentation = not presentations
+    no_features = not features
+    unknown_query = "No recognised graph features" in rationale
+    recognised_but_unmapped = "Recognised clinical features but no confident graph presentation" in rationale
+    needs_more_info = outcome.get("Outcome ID") == "OUT002"
+
+    if unknown_query or no_features:
+        return "Yes", "Uncovered topic / no recognised graph features", "Unreviewed", "New topic"
+    if recognised_but_unmapped or no_confident_presentation:
+        return "Yes", "Recognised feature but no confident presentation", "Unreviewed", "Missed wording or pathway gap"
+    if needs_more_info and missing_info:
+        return "Optional", "More information requested by graph", "Awaiting referrer information", "Existing pathway"
+    return "No", "Graph produced a covered pathway", "Not required", "Existing pathway"
+
+
 def result_to_sheet_row(question, result):
     outcome = result.get("Outcome Recommendation", {})
     presentations = result.get("Presentation Ranking", [])
     top_presentation = presentations[0] if presentations else {}
     draft = result.get("Draft Response", {})
+    needs_review, review_reason, review_status, reviewer_category = clinician_review_flags(result)
 
     return [
         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         question,
+        needs_review,
+        review_reason,
+        review_status,
+        reviewer_category,
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
         outcome.get("Outcome ID", ""),
         outcome.get("Outcome", ""),
         outcome.get("Rationale", ""),
@@ -213,6 +262,20 @@ def render_outcome(outcome):
         """,
         unsafe_allow_html=True,
     )
+
+
+def render_clinician_review_notice(result):
+    needs_review, reason, status, category = clinician_review_flags(result)
+    if needs_review == "Yes":
+        st.warning(
+            "Clinician review required before final advice. "
+            f"Reason: {reason}. Category: {category}."
+        )
+    elif needs_review == "Optional":
+        st.info(
+            "This case is on an existing pathway but needs more information. "
+            "Clinician review may be useful if the referrer cannot provide the requested details."
+        )
 
 
 def render_draft_response(draft):
@@ -328,6 +391,7 @@ def main():
 
         st.subheader("Outcome recommendation")
         render_outcome(result["Outcome Recommendation"])
+        render_clinician_review_notice(result)
 
         st.subheader("Draft response")
         render_draft_response(result.get("Draft Response"))
