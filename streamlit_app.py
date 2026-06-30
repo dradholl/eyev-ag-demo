@@ -100,6 +100,12 @@ GRAPH_CANDIDATE_COLUMNS = [
     "Implementation notes",
 ]
 
+OUTCOME_LABELS = {
+    "OUT001": "Return to referrer with advice",
+    "OUT002": "Return to referrer for more information",
+    "OUT003": "Clinician to convert to referral",
+}
+
 
 def a1_column_name(column_number):
     name = ""
@@ -212,8 +218,8 @@ def join_values(items, key):
 
 
 def clinician_review_flags(result):
-    if result.get("Review Override") == "glaucoma_adherence_support":
-        return "Optional", "Glaucoma adherence / IOP support query", "Awaiting clinician or referrer follow-up", "Existing pathway"
+    if result.get("Review Override") == "glaucoma_adherence_advice":
+        return "No", "Glaucoma adherence support advice", "Not required", "Existing pathway"
 
     outcome = result.get("Outcome Recommendation", {})
     rationale = outcome.get("Rationale", "")
@@ -243,7 +249,7 @@ def enforce_safe_review_outcome(result):
     if needs_review == "Yes" and outcome.get("Outcome ID") == "OUT001":
         result["Outcome Recommendation"] = {
             "Outcome ID": "OUT002",
-            "Outcome": "Return to referrer for more information / clinician review",
+            "Outcome": OUTCOME_LABELS["OUT002"],
             "Rationale": f"Clinician review required: {reason}",
         }
 
@@ -294,8 +300,8 @@ def apply_glaucoma_drop_advice(question, result):
     outcome = result.get("Outcome Recommendation", {})
     if outcome.get("Outcome ID") != "OUT003":
         result["Outcome Recommendation"] = {
-            "Outcome ID": "OUT002",
-            "Outcome": "Provide practical adherence support / consider clinician review",
+            "Outcome ID": "OUT001",
+            "Outcome": OUTCOME_LABELS["OUT001"],
             "Rationale": "Glaucoma drop adherence / IOP asymmetry support query.",
         }
 
@@ -328,7 +334,16 @@ def apply_glaucoma_drop_advice(question, result):
             "use the urgent local glaucoma/ophthalmology pathway."
         ),
     }
-    result["Review Override"] = "glaucoma_adherence_support"
+    result["Review Override"] = "glaucoma_adherence_advice"
+    return result
+
+
+def normalise_outcome_label(result):
+    outcome = result.get("Outcome Recommendation", {})
+    outcome_id = outcome.get("Outcome ID", "")
+    if outcome_id in OUTCOME_LABELS:
+        outcome["Outcome"] = OUTCOME_LABELS[outcome_id]
+        result["Outcome Recommendation"] = outcome
     return result
 
 
@@ -374,6 +389,7 @@ def prepare_result_for_display(question, result):
     result = apply_glaucoma_drop_advice(question, result)
     result = enforce_safe_review_outcome(result)
     result = ensure_draft_response(question, result)
+    result = normalise_outcome_label(result)
     return result
 
 
