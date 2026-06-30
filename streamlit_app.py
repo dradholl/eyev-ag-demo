@@ -61,6 +61,14 @@ SHEET_COLUMNS = [
 ]
 
 
+def a1_column_name(column_number):
+    name = ""
+    while column_number:
+        column_number, remainder = divmod(column_number - 1, 26)
+        name = chr(65 + remainder) + name
+    return name
+
+
 st.set_page_config(
     page_title="EyeV A&G Tool",
     page_icon="",
@@ -129,7 +137,8 @@ def load_google_sheet():
 
     values = worksheet.row_values(1)
     if values != SHEET_COLUMNS:
-        worksheet.update("A1:Q1", [SHEET_COLUMNS])
+        last_col = a1_column_name(len(SHEET_COLUMNS))
+        worksheet.update(f"A1:{last_col}1", [SHEET_COLUMNS])
 
     return worksheet
 
