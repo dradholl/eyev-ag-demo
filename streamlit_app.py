@@ -212,6 +212,9 @@ def join_values(items, key):
 
 
 def clinician_review_flags(result):
+    if result.get("Review Override") == "glaucoma_adherence_support":
+        return "Optional", "Glaucoma adherence / IOP support query", "Awaiting clinician or referrer follow-up", "Existing pathway"
+
     outcome = result.get("Outcome Recommendation", {})
     rationale = outcome.get("Rationale", "")
     presentations = result.get("Presentation Ranking", [])
@@ -289,11 +292,11 @@ def apply_glaucoma_drop_advice(question, result):
         return result
 
     outcome = result.get("Outcome Recommendation", {})
-    if outcome.get("Outcome ID") == "OUT001":
+    if outcome.get("Outcome ID") != "OUT003":
         result["Outcome Recommendation"] = {
             "Outcome ID": "OUT002",
-            "Outcome": "Return to referrer for more information",
-            "Rationale": "Glaucoma drop adherence / IOP asymmetry query needs treatment and monitoring details before advice.",
+            "Outcome": "Provide practical adherence support / consider clinician review",
+            "Rationale": "Glaucoma drop adherence / IOP asymmetry support query.",
         }
 
     existing_missing = {
@@ -317,16 +320,18 @@ def apply_glaucoma_drop_advice(question, result):
     result["Draft Response"] = {
         "Summary": "This appears to be a glaucoma drop adherence / IOP review query.",
         "Suggested response": (
-            "Please confirm the glaucoma drop name, prescribed frequency, actual adherence, whether the patient can instil the drops reliably, "
-            "IOP measurement method and timing, whether drops were used before the IOP check, optic disc/OCT and visual-field status, and current HES/glaucoma follow-up. "
-            "If this is mainly an instillation difficulty, consider practical support such as supervised technique review, a compliance aid/drop dispenser, carer support, "
-            "or liaising with the glaucoma/HES team if treatment change or adherence support is needed."
+            "Based on the information provided, this sounds primarily like difficulty with glaucoma drop instillation/adherence rather than an acute glaucoma presentation. "
+            "Reasonable support would be to check drop technique, simplify the practical routine where possible, involve a carer if appropriate, and consider a compliance aid/drop dispenser. "
+            "If the patient is under HES/glaucoma clinic, the clinician can advise contacting or updating that team if adherence remains poor, if IOP remains asymmetrical/raised despite improved technique, "
+            "or if a treatment change may be needed. If available, the most useful details to include are the drop name/frequency, whether doses were missed before the IOP check, IOP method/timing, "
+            "and recent optic disc/OCT/visual-field status, but lack of these details should not prevent giving practical adherence support."
         ),
         "Safety net": (
-            "If IOP is very high, there is eye pain/redness, corneal haze, halos, nausea/vomiting, sudden vision loss, or marked progression/symptoms, "
+            "If IOP is very high, there is eye pain/redness, corneal haze, halos, nausea/vomiting, sudden vision loss, or marked progression/new symptoms, "
             "use the urgent local glaucoma/ophthalmology pathway."
         ),
     }
+    result["Review Override"] = "glaucoma_adherence_support"
     return result
 
 
@@ -369,8 +374,8 @@ def ensure_draft_response(question, result):
 
 
 def prepare_result_for_display(question, result):
-    result = enforce_safe_review_outcome(result)
     result = apply_glaucoma_drop_advice(question, result)
+    result = enforce_safe_review_outcome(result)
     result = ensure_draft_response(question, result)
     return result
 
