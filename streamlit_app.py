@@ -6,7 +6,6 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 import streamlit as st
-from google.oauth2.service_account import Credentials
 
 from EyeV_OKG_V7_engine import OKGEngine
 
@@ -100,6 +99,7 @@ def load_google_sheet():
         return None
 
     import gspread
+    from google.oauth2.service_account import Credentials
 
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
     credentials = Credentials.from_service_account_info(
