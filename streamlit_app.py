@@ -322,9 +322,6 @@ def apply_glaucoma_drop_advice(question, result):
         "Suggested response": (
             "Based on the information provided, this sounds primarily like difficulty with glaucoma drop instillation/adherence rather than an acute glaucoma presentation. "
             "Reasonable support would be to check drop technique, simplify the practical routine where possible, involve a carer if appropriate, and consider a compliance aid/drop dispenser. "
-            "If the patient is under HES/glaucoma clinic, the clinician can advise contacting or updating that team if adherence remains poor, if IOP remains asymmetrical/raised despite improved technique, "
-            "or if a treatment change may be needed. If available, the most useful details to include are the drop name/frequency, whether doses were missed before the IOP check, IOP method/timing, "
-            "and recent optic disc/OCT/visual-field status, but lack of these details should not prevent giving practical adherence support."
         ),
         "Safety net": (
             "If IOP is very high, there is eye pain/redness, corneal haze, halos, nausea/vomiting, sudden vision loss, or marked progression/new symptoms, "
