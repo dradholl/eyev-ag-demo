@@ -58,6 +58,37 @@ SHEET_COLUMNS = [
     "Draft summary",
     "Draft suggested response",
     "Draft safety net",
+    "Clinician final outcome",
+    "Clinician final response",
+    "Tool use status",
+    "Override / edit reason",
+    "Graph learning candidate",
+    "Learning status",
+    "Tool suggested outcome ID",
+    "Tool suggested outcome",
+    "Tool suggested draft response",
+]
+
+FEEDBACK_COLUMNS = [
+    "Timestamp",
+    "Question",
+    "Tool suggested outcome ID",
+    "Tool suggested outcome",
+    "Tool suggested rationale",
+    "Tool suggested draft response",
+    "Clinician final outcome",
+    "Clinician final response",
+    "Tool use status",
+    "Override / edit reason",
+    "Graph learning candidate",
+    "Learning status",
+    "Detected feature IDs",
+    "Detected features",
+    "Top presentation ID",
+    "Top presentation",
+    "Safety IDs",
+    "Safety conditions",
+    "Missing information",
 ]
 
 REVIEW_QUEUE_COLUMNS = [
@@ -98,6 +129,21 @@ GRAPH_CANDIDATE_COLUMNS = [
     "Approval decision",
     "Approved by",
     "Implementation notes",
+]
+
+TOOL_USE_STATUS_OPTIONS = [
+    "Accepted",
+    "Edited",
+    "Overridden",
+]
+
+GRAPH_LEARNING_OPTIONS = [
+    "No",
+    "Yes - missed phrase",
+    "Yes - wrong outcome",
+    "Yes - missing information rule",
+    "Yes - new topic",
+    "Yes - safety issue",
 ]
 
 OUTCOME_LABELS = {
@@ -393,7 +439,19 @@ def prepare_result_for_display(question, result):
     return result
 
 
-def result_to_sheet_row(question, result):
+def empty_feedback():
+    return {
+        "clinician_final_outcome": "",
+        "clinician_final_response": "",
+        "tool_use_status": "",
+        "override_reason": "",
+        "graph_learning_candidate": "",
+        "learning_status": "",
+    }
+
+
+def result_to_sheet_row(question, result, feedback=None):
+    feedback = feedback or empty_feedback()
     outcome = result.get("Outcome Recommendation", {})
     presentations = result.get("Presentation Ranking", [])
     top_presentation = presentations[0] if presentations else {}
@@ -431,10 +489,20 @@ def result_to_sheet_row(question, result):
         draft.get("Summary", ""),
         draft.get("Suggested response", ""),
         draft.get("Safety net", ""),
+        feedback.get("clinician_final_outcome", ""),
+        feedback.get("clinician_final_response", ""),
+        feedback.get("tool_use_status", ""),
+        feedback.get("override_reason", ""),
+        feedback.get("graph_learning_candidate", ""),
+        feedback.get("learning_status", ""),
+        outcome.get("Outcome ID", ""),
+        outcome.get("Outcome", ""),
+        draft.get("Suggested response", ""),
     ]
 
 
-def result_to_review_queue_row(question, result):
+def result_to_review_queue_row(question, result, feedback=None):
+    feedback = feedback or empty_feedback()
     outcome = result.get("Outcome Recommendation", {})
     presentations = result.get("Presentation Ranking", [])
     top_presentation = presentations[0] if presentations else {}
@@ -457,8 +525,8 @@ def result_to_review_queue_row(question, result):
         join_values(result.get("Missing Information", []), "Missing Information"),
         draft.get("Suggested response", ""),
         "",
-        "",
-        "",
+        feedback.get("clinician_final_response", ""),
+        feedback.get("clinician_final_outcome", ""),
         "",
         "",
     ]
@@ -488,8 +556,38 @@ def result_to_graph_candidate_row(question, result):
     ]
 
 
-def build_logging_payloads(question, result):
-    row = result_to_sheet_row(question, result)
+def result_to_feedback_row(question, result, feedback):
+    outcome = result.get("Outcome Recommendation", {})
+    presentations = result.get("Presentation Ranking", [])
+    top_presentation = presentations[0] if presentations else {}
+    draft = result.get("Draft Response", {})
+
+    return [
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        question,
+        outcome.get("Outcome ID", ""),
+        outcome.get("Outcome", ""),
+        outcome.get("Rationale", ""),
+        draft.get("Suggested response", ""),
+        feedback.get("clinician_final_outcome", ""),
+        feedback.get("clinician_final_response", ""),
+        feedback.get("tool_use_status", ""),
+        feedback.get("override_reason", ""),
+        feedback.get("graph_learning_candidate", ""),
+        feedback.get("learning_status", ""),
+        join_values(result.get("Detected Features", []), "Feature ID"),
+        join_values(result.get("Detected Features", []), "Feature"),
+        top_presentation.get("Presentation ID", ""),
+        top_presentation.get("Presentation", ""),
+        join_values(result.get("Safety Ranking", []), "Safety Condition ID"),
+        join_values(result.get("Safety Ranking", []), "Safety Condition"),
+        join_values(result.get("Missing Information", []), "Missing Information"),
+    ]
+
+
+def build_logging_payloads(question, result, feedback=None):
+    feedback = feedback or empty_feedback()
+    row = result_to_sheet_row(question, result, feedback)
     sheets = [
         {
             "name": "A&G Log",
@@ -506,18 +604,24 @@ def build_logging_payloads(question, result):
             "headers": GRAPH_CANDIDATE_COLUMNS,
             "row": [],
         },
+        {
+            "name": "Clinician Feedback",
+            "headers": FEEDBACK_COLUMNS,
+            "row": result_to_feedback_row(question, result, feedback),
+        },
     ]
 
     needs_review, _reason, _status, _category = clinician_review_flags(result)
-    if needs_review == "Yes":
-        sheets[1]["row"] = result_to_review_queue_row(question, result)
+    learning_candidate = feedback.get("graph_learning_candidate", "")
+    if needs_review == "Yes" or learning_candidate.startswith("Yes"):
+        sheets[1]["row"] = result_to_review_queue_row(question, result, feedback)
         sheets[2]["row"] = result_to_graph_candidate_row(question, result)
 
     return sheets
 
 
-def log_to_google_sheet(question, result):
-    sheets = build_logging_payloads(question, result)
+def log_to_google_sheet(question, result, feedback=None):
+    sheets = build_logging_payloads(question, result, feedback)
 
     if st.secrets.get("GOOGLE_APPS_SCRIPT_URL", ""):
         append_with_apps_script(sheets)
@@ -566,6 +670,15 @@ def diagnostic_log_row():
         "Diagnostic test",
         "If this row appears, Streamlit can write to the Google Sheet.",
         "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "TEST",
+        "Diagnostic logging test",
+        "If this row appears, Streamlit can write to the Google Sheet.",
     ]
 
 
@@ -685,6 +798,78 @@ def render_missing_info(items):
             st.markdown(f"**{item['Missing Information ID']}**  {item['Missing Information']}")
 
 
+def render_clinician_feedback_form(question, result):
+    outcome = result.get("Outcome Recommendation", {})
+    draft = result.get("Draft Response", {})
+    tool_outcome_id = outcome.get("Outcome ID", "")
+    outcome_options = [
+        f"{outcome_id}: {label}"
+        for outcome_id, label in OUTCOME_LABELS.items()
+    ]
+    default_outcome = next(
+        (idx for idx, option in enumerate(outcome_options) if option.startswith(tool_outcome_id)),
+        0,
+    )
+
+    st.subheader("Clinician feedback and final response")
+    with st.form("clinician_feedback_form"):
+        clinician_final_outcome = st.selectbox(
+            "Clinician final outcome",
+            outcome_options,
+            index=default_outcome,
+        )
+        clinician_final_response = st.text_area(
+            "Clinician final response",
+            value=draft.get("Suggested response", ""),
+            height=180,
+        )
+        col1, col2 = st.columns(2)
+        with col1:
+            tool_use_status = st.selectbox(
+                "Was the tool useful?",
+                TOOL_USE_STATUS_OPTIONS,
+                index=0,
+            )
+        with col2:
+            graph_learning_candidate = st.selectbox(
+                "Graph learning candidate?",
+                GRAPH_LEARNING_OPTIONS,
+                index=0,
+            )
+        override_reason = st.text_area(
+            "Override / edit reason",
+            value="",
+            height=90,
+            placeholder="Optional, but useful when the tool was edited or overridden.",
+        )
+
+        submitted = st.form_submit_button("Submit clinician feedback and log", type="primary")
+
+    if not submitted:
+        return
+
+    learning_status = "Pending review" if graph_learning_candidate.startswith("Yes") else "No learning action"
+    feedback = {
+        "clinician_final_outcome": clinician_final_outcome,
+        "clinician_final_response": clinician_final_response.strip(),
+        "tool_use_status": tool_use_status,
+        "override_reason": override_reason.strip(),
+        "graph_learning_candidate": graph_learning_candidate,
+        "learning_status": learning_status,
+    }
+
+    try:
+        log_status = log_to_google_sheet(question, result, feedback)
+    except Exception as exc:
+        st.warning(f"Google Sheet logging failed: {exc}")
+        return
+
+    if log_status == "logged":
+        st.success("Clinician feedback logged to Google Sheet.")
+    elif log_status == "not_configured":
+        st.info("Google Sheet logging is not configured yet.")
+
+
 def main():
     if not check_password():
         return
@@ -729,17 +914,12 @@ def main():
 
         result = engine.analyse(cleaned)
         result = prepare_result_for_display(cleaned, result)
-        log_status = "not_configured"
-        try:
-            log_status = log_to_google_sheet(cleaned, result)
-        except Exception as exc:
-            st.warning(f"Google Sheet logging failed: {exc}")
+        st.session_state["last_question"] = cleaned
+        st.session_state["last_result"] = result
 
-        if log_status == "logged":
-            st.success("Logged to Google Sheet.")
-        elif log_status == "not_configured":
-            st.info("Google Sheet logging is not configured yet.")
-
+    if st.session_state.get("last_result"):
+        cleaned = st.session_state["last_question"]
+        result = st.session_state["last_result"]
         st.subheader("Outcome recommendation")
         render_outcome(result["Outcome Recommendation"])
         render_clinician_review_notice(result)
@@ -760,6 +940,8 @@ def main():
 
         st.subheader("Missing information")
         render_missing_info(result["Missing Information"])
+
+        render_clinician_feedback_form(cleaned, result)
 
         with st.expander("Audit"):
             st.json(result["Audit"])
