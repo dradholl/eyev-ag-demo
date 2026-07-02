@@ -877,7 +877,7 @@ def main():
     engine = load_engine()
 
     st.title("EyeV A&G Tool")
-    st.caption("V7.13.3 prototype. Demo use only. Do not enter patient-identifiable information unless you have local approval.")
+    st.caption("V7.14 feedback-loop prototype. Demo use only. Do not enter patient-identifiable information unless you have local approval.")
 
     with st.sidebar:
         st.header("Examples")
@@ -927,23 +927,24 @@ def main():
         st.subheader("Draft response")
         render_draft_response(result.get("Draft Response"))
 
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Detected features")
-            render_features(result["Detected Features"])
-        with col2:
-            st.subheader("Safety")
-            render_safety(result["Safety Ranking"])
-
-        st.subheader("Presentation ranking")
-        render_presentations(result["Presentation Ranking"])
-
-        st.subheader("Missing information")
-        render_missing_info(result["Missing Information"])
-
         render_clinician_feedback_form(cleaned, result)
 
-        with st.expander("Audit"):
+        with st.expander("Reasoning details"):
+            col1, col2 = st.columns(2)
+            with col1:
+                st.subheader("Detected features")
+                render_features(result["Detected Features"])
+            with col2:
+                st.subheader("Safety")
+                render_safety(result["Safety Ranking"])
+
+            st.subheader("Presentation ranking")
+            render_presentations(result["Presentation Ranking"])
+
+            st.subheader("Missing information")
+            render_missing_info(result["Missing Information"])
+
+        with st.expander("Audit log details"):
             st.json(result["Audit"])
 
 
