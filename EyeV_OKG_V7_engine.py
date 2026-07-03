@@ -1454,6 +1454,56 @@ class OKGEngine:
                 "Safety net": "Document VA, IOP, pupil, anterior chamber/angle findings and attach anterior-segment imaging if available.",
             }
 
+        if top_presentation_id == "PR060":
+            return {
+                "Summary": "This appears to be a referral-level macular OCT structural or fluid concern.",
+                "Suggested response": (
+                    "Clinician to convert to the appropriate local medical-retina pathway. Include OCT images, VA, laterality, "
+                    "symptom onset/change, distortion/Amsler status, fundus findings and any previous comparison OCT or macular history."
+                ),
+                "Safety net": "Escalate urgently if there is sudden central vision loss, new distortion, rapidly worsening symptoms, haemorrhage or suspected active wet AMD/CNV.",
+            }
+
+        if top_presentation_id == "PR061":
+            return {
+                "Summary": "This appears to be a retinal inflammatory or white-dot lesion query.",
+                "Suggested response": (
+                    "Clinician to convert to the appropriate local retina pathway. Include VA, laterality, onset/duration, symptoms, "
+                    "fundus/OCT images and any systemic or inflammatory history if available."
+                ),
+                "Safety net": "Use the urgent pathway if there is marked or rapidly worsening vision loss, significant pain, severe inflammation or other acute red flags.",
+            }
+
+        if top_presentation_id == "PR062":
+            return {
+                "Summary": "This appears to be a diabetic macular/OCT abnormality or progression concern.",
+                "Suggested response": (
+                    "Clinician to convert to the appropriate local diabetic medical-retina pathway. Include OCT/photographs, VA, laterality, "
+                    "retinopathy/maculopathy grade, previous laser/injections and current screening or HES status where available."
+                ),
+                "Safety net": "Escalate urgently if there are new vessels, vitreous haemorrhage, sudden vision loss or rapidly progressive diabetic eye disease features.",
+            }
+
+        if top_presentation_id == "PR063":
+            return {
+                "Summary": "This appears to be a post-cataract CMO, VMT or cystic macular change concern.",
+                "Suggested response": (
+                    "Clinician to convert to the relevant post-operative cataract or medical-retina pathway. Include OCT images, VA, "
+                    "time since surgery, symptom change, current drops/treatment and whether there are any post-operative infection red flags."
+                ),
+                "Safety net": "Use the urgent post-operative pathway if there is pain, red eye, photophobia, hypopyon, marked reduced vision or concern about endophthalmitis.",
+            }
+
+        if top_presentation_id == "PR010":
+            return {
+                "Summary": "This appears to be a glaucoma or optic-nerve structural/visual-field deterioration concern.",
+                "Suggested response": (
+                    "Clinician to convert to the appropriate local glaucoma pathway. Include IOP values and method, disc/OCT RNFL images, "
+                    "visual-field printouts/reliability, previous comparison and whether the patient is already under HES/glaucoma follow-up."
+                ),
+                "Safety net": "Use the urgent pathway if there are acute angle-closure symptoms, sudden vision loss, painful red eye or rapidly progressive field/optic-nerve change.",
+            }
+
         if outcome_id == "OUT003":
             return {
                 "Summary": "The graph has identified features that may need urgent assessment.",

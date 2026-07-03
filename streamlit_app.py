@@ -877,7 +877,7 @@ def main():
     engine = load_engine()
 
     st.title("EyeV A&G Tool")
-    st.caption("V7.14 feedback-loop prototype. Demo use only. Do not enter patient-identifiable information unless you have local approval.")
+    st.caption("V7.15 / OKG v2.15 feedback-loop prototype. Demo use only. Do not enter patient-identifiable information unless you have local approval.")
 
     with st.sidebar:
         st.header("Examples")
