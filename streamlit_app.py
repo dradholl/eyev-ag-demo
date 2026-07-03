@@ -46,6 +46,7 @@ SHEET_COLUMNS = [
     "Outcome ID",
     "Outcome",
     "Outcome rationale",
+    "Suggested response confidence",
     "Top presentation ID",
     "Top presentation",
     "Top presentation confidence",
@@ -75,6 +76,7 @@ FEEDBACK_COLUMNS = [
     "Tool suggested outcome ID",
     "Tool suggested outcome",
     "Tool suggested rationale",
+    "Suggested response confidence",
     "Tool suggested draft response",
     "Clinician final outcome",
     "Clinician final response",
@@ -308,6 +310,35 @@ def clinician_review_flags(result):
     return "No", "Graph produced a covered pathway", "Not required", "Existing pathway"
 
 
+def suggested_response_confidence(result):
+    needs_review, review_reason, _status, _category = clinician_review_flags(result)
+    outcome = result.get("Outcome Recommendation", {})
+    presentations = result.get("Presentation Ranking", [])
+    top_confidence = presentations[0].get("Confidence", 0) if presentations else 0
+
+    if needs_review == "Yes":
+        return "Low", "This topic is not yet covered confidently and should be checked by a clinician."
+
+    if outcome.get("Outcome ID") == "OUT002":
+        return "Medium", "The pathway is recognised, but more information is needed before final advice."
+
+    if top_confidence >= 80:
+        return "High", "The pathway is recognised with strong supporting features."
+
+    if top_confidence >= 60:
+        return "Medium", "The pathway is recognised, but the match is not strong."
+
+    return "Low", "The match is uncertain and should be checked carefully."
+
+
+def add_confidence_to_audit(result):
+    confidence, explanation = suggested_response_confidence(result)
+    result.setdefault("Audit", {})
+    result["Audit"]["Suggested response confidence"] = confidence
+    result["Audit"]["Suggested response confidence reason"] = explanation
+    return result
+
+
 def enforce_safe_review_outcome(result):
     needs_review, reason, _status, _category = clinician_review_flags(result)
     outcome = result.get("Outcome Recommendation", {})
@@ -502,6 +533,7 @@ def prepare_result_for_display(question, result):
     result = enforce_safe_review_outcome(result)
     result = ensure_draft_response(question, result)
     result = soften_draft_response_language(result)
+    result = add_confidence_to_audit(result)
     result = normalise_outcome_label(result)
     return result
 
@@ -758,6 +790,7 @@ def result_to_sheet_row(question, result, feedback=None):
     top_presentation = presentations[0] if presentations else {}
     draft = result.get("Draft Response", {})
     needs_review, review_reason, review_status, reviewer_category = clinician_review_flags(result)
+    confidence, _confidence_reason = suggested_response_confidence(result)
 
     return [
         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -778,6 +811,7 @@ def result_to_sheet_row(question, result, feedback=None):
         outcome.get("Outcome ID", ""),
         outcome.get("Outcome", ""),
         outcome.get("Rationale", ""),
+        confidence,
         top_presentation.get("Presentation ID", ""),
         top_presentation.get("Presentation", ""),
         top_presentation.get("Confidence", ""),
@@ -867,6 +901,7 @@ def result_to_feedback_row(question, result, feedback):
     presentations = result.get("Presentation Ranking", [])
     top_presentation = presentations[0] if presentations else {}
     draft = result.get("Draft Response", {})
+    confidence, _confidence_reason = suggested_response_confidence(result)
 
     return [
         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -874,6 +909,7 @@ def result_to_feedback_row(question, result, feedback):
         outcome.get("Outcome ID", ""),
         outcome.get("Outcome", ""),
         outcome.get("Rationale", ""),
+        confidence,
         draft.get("Suggested response", ""),
         feedback.get("clinician_final_outcome", ""),
         feedback.get("clinician_final_response", ""),
@@ -946,47 +982,27 @@ def log_to_google_sheet(question, result, feedback=None):
 
 
 def diagnostic_log_row():
-    return [
-        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "DIAGNOSTIC TEST - Streamlit to Google Sheet logging",
-        "No",
-        "Diagnostic test row",
-        "Not required",
-        "System test",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "TEST",
-        "Diagnostic logging test",
-        "Manual sidebar test",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "Diagnostic test",
-        "If this row appears, Streamlit can write to the Google Sheet.",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "TEST",
-        "Diagnostic logging test",
-        "If this row appears, Streamlit can write to the Google Sheet.",
-    ]
+    row = [""] * len(SHEET_COLUMNS)
+    values = {
+        "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "Question": "DIAGNOSTIC TEST - Streamlit to Google Sheet logging",
+        "Needs clinician review": "No",
+        "Review reason": "Diagnostic test row",
+        "Review status": "Not required",
+        "Reviewer category": "System test",
+        "Outcome ID": "TEST",
+        "Outcome": "Diagnostic logging test",
+        "Outcome rationale": "Manual sidebar test",
+        "Suggested response confidence": "High",
+        "Draft summary": "Diagnostic test",
+        "Draft suggested response": "If this row appears, Streamlit can write to the Google Sheet.",
+        "Tool suggested outcome ID": "TEST",
+        "Tool suggested outcome": "Diagnostic logging test",
+        "Tool suggested draft response": "If this row appears, Streamlit can write to the Google Sheet.",
+    }
+    for column, value in values.items():
+        row[SHEET_COLUMNS.index(column)] = value
+    return row
 
 
 def run_logging_diagnostic():
@@ -1118,9 +1134,12 @@ def render_clinician_feedback_form(question, result):
         (idx for idx, option in enumerate(outcome_options) if option == OUTCOME_DISPLAY_LABELS.get(tool_outcome_id, "")),
         0,
     )
+    confidence, confidence_reason = suggested_response_confidence(result)
 
     st.subheader("Clinician response")
     st.caption("Check the suggested wording, amend it if needed, then save the response.")
+    st.markdown(f"**Confidence in suggested response:** {confidence}")
+    st.caption(confidence_reason)
     with st.container(border=True):
         clinician_final_outcome = st.radio(
             "What should happen next?",
@@ -1243,32 +1262,6 @@ def main():
         cleaned = st.session_state["last_question"]
         result = st.session_state["last_result"]
         render_clinician_feedback_form(cleaned, result)
-
-        with st.expander("Show background reasoning recorded for audit"):
-            st.subheader("Outcome recommendation")
-            render_outcome(result["Outcome Recommendation"])
-            render_clinician_review_notice(result)
-
-            st.subheader("Draft response")
-            render_draft_response(result.get("Draft Response"))
-
-        with st.expander("Reasoning details"):
-            col1, col2 = st.columns(2)
-            with col1:
-                st.subheader("Detected features")
-                render_features(result["Detected Features"])
-            with col2:
-                st.subheader("Safety")
-                render_safety(result["Safety Ranking"])
-
-            st.subheader("Presentation ranking")
-            render_presentations(result["Presentation Ranking"])
-
-            st.subheader("Missing information")
-            render_missing_info(result["Missing Information"])
-
-        with st.expander("Audit log details"):
-            st.json(result["Audit"])
 
 
 if __name__ == "__main__":
