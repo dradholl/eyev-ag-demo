@@ -492,6 +492,54 @@ def soften_draft_response_language(result):
 
     response = str(draft.get("Suggested response", "") or "").strip()
     safety_net = str(draft.get("Safety net", "") or "").strip()
+    query = normalise_text(result.get("Query", ""))
+    presentations = result.get("Presentation Ranking", [])
+    top_presentation_id = presentations[0].get("Presentation ID", "") if presentations else ""
+
+    if (
+        top_presentation_id == "PR051"
+        or "optic disc drusen" in query
+        or "pseudopapilloedema" in query
+        or "pseudopapilledema" in query
+    ):
+        draft["Suggested response"] = (
+            "Thanks for this. If the optic disc drusen/pseudopapilloedema is already known, stable and there are no new symptoms or new examination concerns, "
+            "a new ophthalmology referral does not appear to be needed on the information provided. Please advise the patient to seek review if they develop new visual symptoms or headaches, "
+            "or if the disc appearance changes."
+        )
+        draft["Safety net"] = (
+            "If there are new headaches, transient visual obscurations, diplopia, vomiting, reduced vision, field loss, or concern for true disc swelling, "
+            "please refer urgently using the local ophthalmology pathway."
+        )
+        result["Draft Response"] = draft
+        return result
+
+    if top_presentation_id == "PR010" or (
+        ("raised iop" in query or "iop" in query or "iops" in query)
+        and ("disc" in query or "glaucoma" in query or "field" in query)
+    ):
+        draft["Suggested response"] = (
+            "Thanks for this. The raised IOP and suspicious disc findings need glaucoma assessment, so please refer via the local glaucoma pathway. "
+            "It would be helpful to include IOP values and method, disc/OCT RNFL images, visual-field printouts/reliability, previous comparison and whether the patient is already under HES/glaucoma follow-up."
+        )
+        draft["Safety net"] = (
+            "If there are acute angle-closure symptoms, sudden vision loss, painful red eye or rapidly progressive field/optic-nerve change, "
+            "please refer urgently using the local pathway."
+        )
+        result["Draft Response"] = draft
+        return result
+
+    if response.startswith("Return advice only"):
+        draft["Suggested response"] = (
+            "Thanks for this. From the information provided, this sounds suitable for advice back to the referrer, provided there are no red-flag symptoms or concerning examination findings. "
+            "Please safety-net the patient to seek urgent reassessment if symptoms worsen, vision drops, pain/redness develops, or any other red flags appear."
+        )
+
+    if response.startswith("Convert or escalate"):
+        draft["Suggested response"] = (
+            "Thanks for this. From the details provided, this should be referred for ophthalmology assessment using the appropriate local pathway. "
+            "Please include the symptom history, VA, laterality, relevant positive and negative findings, and any images/OCT/photos available."
+        )
 
     if response.startswith("Please provide:"):
         details = response.replace("Please provide:", "", 1).strip().rstrip(".")
