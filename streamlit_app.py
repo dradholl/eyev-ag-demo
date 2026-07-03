@@ -132,13 +132,13 @@ GRAPH_CANDIDATE_COLUMNS = [
 ]
 
 GRAPH_LEARNING_OPTIONS = [
-    "Work this out from my response",
-    "No further improvement needed",
-    "The tool missed wording in the request",
-    "The tool suggested the wrong next step",
-    "The tool should have asked for different information",
+    "Decide from my final response",
+    "No, this was fine",
+    "It missed wording in the request",
+    "It suggested the wrong action",
+    "It asked for unhelpful information",
     "This is a new topic or pathway",
-    "There may be a safety concern",
+    "There may be a safety issue",
 ]
 
 OUTCOME_LABELS = {
@@ -148,18 +148,27 @@ OUTCOME_LABELS = {
 }
 
 OUTCOME_DISPLAY_LABELS = {
-    "OUT001": "Give advice to the referrer",
+    "OUT001": "Send advice back",
     "OUT002": "Ask the referrer for more information",
     "OUT003": "Convert to referral",
 }
 
 LEARNING_SIGNAL_MAP = {
+    "Decide from my final response": "Auto-detect from final response",
     "Work this out from my response": "Auto-detect from final response",
+    "No, this was fine": "No",
     "No further improvement needed": "No",
     "The tool missed wording in the request": "Yes - missed phrase",
+    "It missed important wording": "Yes - missed phrase",
+    "It missed wording in the request": "Yes - missed phrase",
     "The tool suggested the wrong next step": "Yes - wrong outcome",
+    "It suggested the wrong next step": "Yes - wrong outcome",
+    "It suggested the wrong action": "Yes - wrong outcome",
     "The tool should have asked for different information": "Yes - missing information rule",
+    "It asked for the wrong information": "Yes - missing information rule",
+    "It asked for unhelpful information": "Yes - missing information rule",
     "This is a new topic or pathway": "Yes - new topic",
+    "There may be a safety issue": "Yes - safety issue",
     "There may be a safety concern": "Yes - safety issue",
 }
 
@@ -1067,9 +1076,7 @@ def render_clinician_feedback_form(question, result):
     )
 
     st.subheader("Clinician response")
-    st.info(
-        "Choose what should happen next and edit the response if needed. The audit log will capture what changed automatically."
-    )
+    st.caption("Check the suggested wording, amend it if needed, then save the response.")
     with st.container(border=True):
         with st.form("clinician_feedback_form"):
             clinician_final_outcome = st.radio(
@@ -1088,9 +1095,9 @@ def render_clinician_feedback_form(question, result):
                 ),
             )
 
-            with st.expander("Optional improvement note"):
+            with st.expander("Optional: help improve future suggestions"):
                 graph_learning_candidate = st.selectbox(
-                    "How should this case be used to improve the tool?",
+                    "Does this case show something the tool should learn?",
                     GRAPH_LEARNING_OPTIONS,
                     index=0,
                 )
@@ -1098,14 +1105,14 @@ def render_clinician_feedback_form(question, result):
                     "Comment",
                     value="",
                     height=90,
-                    placeholder="Optional. For example: missed lid lesion wording, should have suggested referral, or should ask for a photo.",
+                    placeholder="Optional. For example: missed lid lump wording, should have suggested referral, or asked for a photo.",
                 )
                 reasoning_not_satisfactory = st.checkbox(
-                    "The suggested reasoning was not clinically satisfactory",
+                    "The clinical reasoning was not satisfactory",
                     value=False,
                 )
 
-            submitted = st.form_submit_button("Save response", type="primary")
+            submitted = st.form_submit_button("Save clinician response", type="primary")
 
     if not submitted:
         return
@@ -1134,7 +1141,7 @@ def render_clinician_feedback_form(question, result):
         st.success("Response saved.")
         if learning["learning_candidate"].startswith("Yes"):
             st.info(
-                "This case has been added to the improvement review list."
+                "This case has been added to the review list for future improvement."
             )
     elif log_status == "not_configured":
         st.info("Google Sheet logging is not configured yet.")
@@ -1147,35 +1154,30 @@ def main():
     engine = load_engine()
 
     st.title("EyeV A&G Tool")
-    st.caption("V7.15.1 / OKG v2.15 streamlined sign-off prototype. Demo use only. Do not enter patient-identifiable information unless you have local approval.")
-    st.success("V7.15.1 streamlined layout active: sign-off first; tool recommendation and draft response are hidden in the audit expander.")
+    st.caption("Clinician support prototype. Demo use only. Do not enter patient-identifiable information unless you have local approval.")
 
     with st.sidebar:
-        st.header("Examples")
-        selected_example = st.selectbox("Choose a test question", [""] + EXAMPLES)
+        st.header("Example cases")
+        selected_example = st.selectbox("Try an example", [""] + EXAMPLES)
         st.divider()
-        st.subheader("Deployment note")
-        st.write("For public demo links, set an app password and use synthetic or anonymised cases only.")
-        st.divider()
-        st.subheader("Logging")
-        mode = logging_mode()
-        if mode == "apps_script":
-            st.success("Google Sheet logging configured")
-        elif mode == "service_account":
-            st.success("Google Sheet logging configured")
-        else:
-            st.info("Google Sheet logging not configured")
+        with st.expander("Admin"):
+            st.write("For public demo links, set an app password and use synthetic or anonymised cases only.")
+            mode = logging_mode()
+            if mode in ("apps_script", "service_account"):
+                st.success("Google Sheet logging configured")
+            else:
+                st.info("Google Sheet logging not configured")
 
-        if st.button("Test Google Sheet logging"):
-            try:
-                st.success(run_logging_diagnostic())
-            except Exception as exc:
-                st.error(f"Logging test failed: {exc}")
+            if st.button("Test Google Sheet logging"):
+                try:
+                    st.success(run_logging_diagnostic())
+                except Exception as exc:
+                    st.error(f"Logging test failed: {exc}")
 
     default_text = selected_example or EXAMPLES[0]
     question = st.text_area("A&G request text", value=default_text, height=180)
 
-    analyse = st.button("Analyse", type="primary")
+    analyse = st.button("Create suggested response", type="primary")
 
     if analyse:
         cleaned = question.strip()
@@ -1193,7 +1195,7 @@ def main():
         result = st.session_state["last_result"]
         render_clinician_feedback_form(cleaned, result)
 
-        with st.expander("Tool evidence captured in audit log"):
+        with st.expander("Show background reasoning recorded for audit"):
             st.subheader("Outcome recommendation")
             render_outcome(result["Outcome Recommendation"])
             render_clinician_review_notice(result)
