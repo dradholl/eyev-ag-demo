@@ -1096,8 +1096,8 @@ def main():
     engine = load_engine()
 
     st.title("EyeV A&G Tool")
-    st.caption("V7.15 / OKG v2.15 feedback-loop prototype. Demo use only. Do not enter patient-identifiable information unless you have local approval.")
-    st.success("Quick clinician sign-off layout active: final outcome + final advice only. Extra audit fields are hidden.")
+    st.caption("V7.15.1 / OKG v2.15 streamlined sign-off prototype. Demo use only. Do not enter patient-identifiable information unless you have local approval.")
+    st.success("V7.15.1 streamlined layout active: sign-off first; tool recommendation and draft response are hidden in the audit expander.")
 
     with st.sidebar:
         st.header("Examples")
@@ -1140,14 +1140,15 @@ def main():
     if st.session_state.get("last_result"):
         cleaned = st.session_state["last_question"]
         result = st.session_state["last_result"]
-        st.subheader("Outcome recommendation")
-        render_outcome(result["Outcome Recommendation"])
-        render_clinician_review_notice(result)
-
-        st.subheader("Draft response")
-        render_draft_response(result.get("Draft Response"))
-
         render_clinician_feedback_form(cleaned, result)
+
+        with st.expander("Tool evidence captured in audit log"):
+            st.subheader("Outcome recommendation")
+            render_outcome(result["Outcome Recommendation"])
+            render_clinician_review_notice(result)
+
+            st.subheader("Draft response")
+            render_draft_response(result.get("Draft Response"))
 
         with st.expander("Reasoning details"):
             col1, col2 = st.columns(2)
