@@ -139,6 +139,7 @@ TOOL_USE_STATUS_OPTIONS = [
 
 GRAPH_LEARNING_OPTIONS = [
     "No",
+    "Auto-detect from final response",
     "Yes - missed phrase",
     "Yes - wrong outcome",
     "Yes - missing information rule",
@@ -450,8 +451,200 @@ def empty_feedback():
     }
 
 
+def outcome_id_from_label(label):
+    return str(label or "").split(":", 1)[0].strip()
+
+
+def normalise_text(value):
+    return " ".join(str(value or "").lower().split())
+
+
+def clinician_response_suggests_referral(text):
+    text = normalise_text(text)
+    referral_terms = [
+        "convert",
+        "converted",
+        "refer",
+        "referral",
+        "book",
+        "clinic",
+        "urgent",
+        "same day",
+        "eye casualty",
+        "ophthalmology",
+        "oculoplastics",
+        "medical retina",
+        "glaucoma",
+    ]
+    return any(term in text for term in referral_terms)
+
+
+def clinician_response_requests_information(text):
+    text = normalise_text(text)
+    info_terms = [
+        "please provide",
+        "provide",
+        "attach",
+        "send",
+        "photo",
+        "photograph",
+        "image",
+        "oct",
+        "visual acuity",
+        " va ",
+        "duration",
+        "onset",
+        "laterality",
+        "which eye",
+        "size",
+        "growth",
+        "change",
+        "bleeding",
+        "ulceration",
+        "lash loss",
+        "redness",
+        "pain",
+        "iop",
+        "fields",
+    ]
+    padded = f" {text} "
+    return any(term in padded for term in info_terms)
+
+
+def infer_graph_learning_candidate(question, result, feedback):
+    requested = feedback.get("graph_learning_candidate", "")
+    if requested and requested != "Auto-detect from final response":
+        return requested, feedback.get("override_reason", "")
+
+    outcome = result.get("Outcome Recommendation", {})
+    tool_outcome_id = outcome.get("Outcome ID", "")
+    clinician_outcome_id = outcome_id_from_label(feedback.get("clinician_final_outcome", ""))
+    response = feedback.get("clinician_final_response", "")
+    override_reason = feedback.get("override_reason", "")
+    needs_review, review_reason, _status, category = clinician_review_flags(result)
+    presentations = result.get("Presentation Ranking", [])
+    features = result.get("Detected Features", [])
+
+    if clinician_outcome_id and clinician_outcome_id != tool_outcome_id:
+        if clinician_outcome_id == "OUT003" or clinician_response_suggests_referral(response):
+            return "Yes - wrong outcome", "Clinician final outcome was more escalatory than the tool."
+        return "Yes - wrong outcome", "Clinician final outcome differed from the tool."
+
+    if needs_review == "Yes":
+        if not features or category == "New topic":
+            return "Yes - new topic", review_reason
+        if not presentations:
+            return "Yes - missed phrase", review_reason
+        return "Yes - missed phrase", review_reason
+
+    if clinician_response_requests_information(response) and outcome.get("Outcome ID") == "OUT001":
+        return "Yes - missing information rule", "Clinician response asked for extra details when the tool suggested advice."
+
+    if clinician_response_suggests_referral(response) and outcome.get("Outcome ID") != "OUT003":
+        return "Yes - safety issue", "Clinician response suggested referral/escalation when the tool did not."
+
+    if override_reason:
+        return "Yes - missed phrase", override_reason
+
+    return "No", ""
+
+
+def extract_likely_topic_phrase(question, result):
+    text = normalise_text(question)
+    feature_names = [feature.get("Feature", "") for feature in result.get("Detected Features", [])]
+    topic_terms = [
+        ("lid lump / suspicious eyelid lesion", ["lid", "lump", "eyelid", "lesion", "waterline", "lash"]),
+        ("macular OCT / retinal lesion", ["macula", "macular", "oct", "retina", "retinal", "fluid", "hole"]),
+        ("glaucoma / IOP / optic nerve", ["glaucoma", "iop", "pressure", "optic nerve", "disc", "field"]),
+        ("cornea / keratoconus", ["cornea", "corneal", "keratoconus", "contact lens"]),
+        ("watering eye / lacrimal", ["watering", "watery", "epiphora", "lacrimal", "tear duct"]),
+    ]
+    for label, terms in topic_terms:
+        if any(term in text for term in terms):
+            return label
+    if feature_names:
+        return "; ".join(feature_names[:3])
+    words = [word for word in text.split() if len(word) > 4]
+    return " ".join(words[:8]) or "Unclear clinical topic"
+
+
+def extract_missing_information_hint(response):
+    text = normalise_text(response)
+    hints = []
+    checks = [
+        ("clinical photograph / image", ["photo", "photograph", "image", "attach"]),
+        ("duration / onset / change", ["duration", "onset", "change", "growth", "worsening"]),
+        ("VA and laterality", ["visual acuity", " va ", "laterality", "which eye"]),
+        ("red-flag symptoms", ["pain", "redness", "photophobia", "bleeding", "ulceration", "lash loss"]),
+        ("OCT / scan findings", ["oct", "scan"]),
+        ("IOP / disc / fields", ["iop", "pressure", "disc", "field", "rnfl"]),
+    ]
+    padded = f" {text} "
+    for label, terms in checks:
+        if any(term in padded for term in terms):
+            hints.append(label)
+    return "; ".join(hints)
+
+
+def suggested_validation_case(question, feedback):
+    outcome_id = outcome_id_from_label(feedback.get("clinician_final_outcome", ""))
+    response = feedback.get("clinician_final_response", "")
+    if not question:
+        return ""
+    return f"Query: {question} | Expected outcome: {outcome_id or 'review'} | Clinician response: {response[:180]}"
+
+
+def graph_learning_payload(question, result, feedback):
+    learning_candidate, inferred_reason = infer_graph_learning_candidate(question, result, feedback)
+    response = feedback.get("clinician_final_response", "")
+    outcome_id = outcome_id_from_label(feedback.get("clinician_final_outcome", ""))
+    topic_phrase = extract_likely_topic_phrase(question, result)
+    missing_hint = extract_missing_information_hint(response)
+
+    if learning_candidate == "No":
+        return {
+            "learning_candidate": "No",
+            "learning_status": "No learning action",
+            "candidate_reason": inferred_reason,
+            "proposed_change_type": "",
+            "proposed_new_feature": "",
+            "proposed_new_presentation": "",
+            "proposed_missing_info": "",
+            "proposed_safety_condition": "",
+            "proposed_validation_case": "",
+        }
+
+    if learning_candidate == "Yes - new topic":
+        proposed_change_type = "New feature/presentation"
+    elif learning_candidate == "Yes - missed phrase":
+        proposed_change_type = "Synonym/pathway review"
+    elif learning_candidate == "Yes - missing information rule":
+        proposed_change_type = "Missing-information rule"
+    elif learning_candidate == "Yes - safety issue":
+        proposed_change_type = "Safety/outcome review"
+    else:
+        proposed_change_type = "Outcome calibration"
+
+    proposed_new_presentation = ""
+    if outcome_id:
+        proposed_new_presentation = f"{topic_phrase} -> {outcome_id}"
+
+    return {
+        "learning_candidate": learning_candidate,
+        "learning_status": "Pending review",
+        "candidate_reason": inferred_reason,
+        "proposed_change_type": proposed_change_type,
+        "proposed_new_feature": topic_phrase,
+        "proposed_new_presentation": proposed_new_presentation,
+        "proposed_missing_info": missing_hint,
+        "proposed_safety_condition": "Review if clinician response indicates referral/escalation or red flags",
+        "proposed_validation_case": suggested_validation_case(question, feedback),
+    }
+
+
 def result_to_sheet_row(question, result, feedback=None):
     feedback = feedback or empty_feedback()
+    learning = graph_learning_payload(question, result, feedback)
     outcome = result.get("Outcome Recommendation", {})
     presentations = result.get("Presentation Ranking", [])
     top_presentation = presentations[0] if presentations else {}
@@ -493,8 +686,8 @@ def result_to_sheet_row(question, result, feedback=None):
         feedback.get("clinician_final_response", ""),
         feedback.get("tool_use_status", ""),
         feedback.get("override_reason", ""),
-        feedback.get("graph_learning_candidate", ""),
-        feedback.get("learning_status", ""),
+        learning["learning_candidate"],
+        learning["learning_status"],
         outcome.get("Outcome ID", ""),
         outcome.get("Outcome", ""),
         draft.get("Suggested response", ""),
@@ -503,6 +696,7 @@ def result_to_sheet_row(question, result, feedback=None):
 
 def result_to_review_queue_row(question, result, feedback=None):
     feedback = feedback or empty_feedback()
+    learning = graph_learning_payload(question, result, feedback)
     outcome = result.get("Outcome Recommendation", {})
     presentations = result.get("Presentation Ranking", [])
     top_presentation = presentations[0] if presentations else {}
@@ -528,28 +722,31 @@ def result_to_review_queue_row(question, result, feedback=None):
         feedback.get("clinician_final_response", ""),
         feedback.get("clinician_final_outcome", ""),
         "",
-        "",
+        learning["proposed_change_type"] or "",
     ]
 
 
-def result_to_graph_candidate_row(question, result):
+def result_to_graph_candidate_row(question, result, feedback=None):
+    feedback = feedback or empty_feedback()
+    learning = graph_learning_payload(question, result, feedback)
     draft = result.get("Draft Response", {})
     needs_review, review_reason, _review_status, reviewer_category = clinician_review_flags(result)
-    proposed_change_type = "New pathway" if reviewer_category == "New topic" else "Synonym/pathway review"
+    proposed_change_type = learning["proposed_change_type"] or ("New pathway" if reviewer_category == "New topic" else "Synonym/pathway review")
+    candidate_reason = learning["candidate_reason"] or review_reason
 
     return [
         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         question,
         "Pending clinician review",
-        review_reason,
+        candidate_reason,
         reviewer_category,
         proposed_change_type,
-        "",
-        "",
-        "",
-        "",
-        "",
-        draft.get("Suggested response", ""),
+        learning["proposed_new_feature"],
+        learning["proposed_new_presentation"],
+        learning["proposed_missing_info"],
+        learning["proposed_safety_condition"],
+        learning["proposed_validation_case"],
+        feedback.get("clinician_final_response", "") or draft.get("Suggested response", ""),
         "",
         "",
         "",
@@ -557,6 +754,7 @@ def result_to_graph_candidate_row(question, result):
 
 
 def result_to_feedback_row(question, result, feedback):
+    learning = graph_learning_payload(question, result, feedback)
     outcome = result.get("Outcome Recommendation", {})
     presentations = result.get("Presentation Ranking", [])
     top_presentation = presentations[0] if presentations else {}
@@ -573,8 +771,8 @@ def result_to_feedback_row(question, result, feedback):
         feedback.get("clinician_final_response", ""),
         feedback.get("tool_use_status", ""),
         feedback.get("override_reason", ""),
-        feedback.get("graph_learning_candidate", ""),
-        feedback.get("learning_status", ""),
+        learning["learning_candidate"],
+        learning["learning_status"],
         join_values(result.get("Detected Features", []), "Feature ID"),
         join_values(result.get("Detected Features", []), "Feature"),
         top_presentation.get("Presentation ID", ""),
@@ -587,6 +785,7 @@ def result_to_feedback_row(question, result, feedback):
 
 def build_logging_payloads(question, result, feedback=None):
     feedback = feedback or empty_feedback()
+    learning = graph_learning_payload(question, result, feedback)
     row = result_to_sheet_row(question, result, feedback)
     sheets = [
         {
@@ -612,10 +811,10 @@ def build_logging_payloads(question, result, feedback=None):
     ]
 
     needs_review, _reason, _status, _category = clinician_review_flags(result)
-    learning_candidate = feedback.get("graph_learning_candidate", "")
+    learning_candidate = learning["learning_candidate"]
     if needs_review == "Yes" or learning_candidate.startswith("Yes"):
         sheets[1]["row"] = result_to_review_queue_row(question, result, feedback)
-        sheets[2]["row"] = result_to_graph_candidate_row(question, result)
+        sheets[2]["row"] = result_to_graph_candidate_row(question, result, feedback)
 
     return sheets
 
@@ -801,6 +1000,7 @@ def render_missing_info(items):
 def render_clinician_feedback_form(question, result):
     outcome = result.get("Outcome Recommendation", {})
     draft = result.get("Draft Response", {})
+    needs_review, review_reason, _status, _category = clinician_review_flags(result)
     tool_outcome_id = outcome.get("Outcome ID", "")
     outcome_options = [
         f"{outcome_id}: {label}"
@@ -811,52 +1011,66 @@ def render_clinician_feedback_form(question, result):
         0,
     )
 
-    st.subheader("Clinician feedback and final response")
-    with st.form("clinician_feedback_form"):
-        clinician_final_outcome = st.selectbox(
-            "Clinician final outcome",
-            outcome_options,
-            index=default_outcome,
-        )
-        clinician_final_response = st.text_area(
-            "Clinician final response",
-            value=draft.get("Suggested response", ""),
-            height=180,
-        )
-        col1, col2 = st.columns(2)
-        with col1:
-            tool_use_status = st.selectbox(
-                "Was the tool useful?",
-                TOOL_USE_STATUS_OPTIONS,
-                index=0,
+    st.subheader("Quick clinician sign-off")
+    st.info(
+        "Time-saving mode: choose the final outcome and type/paste the advice you would send. "
+        "Graph-learning fields are auto-filled in the log."
+    )
+    with st.container(border=True):
+        with st.form("clinician_feedback_form"):
+            clinician_final_outcome = st.radio(
+                "Final outcome",
+                outcome_options,
+                index=default_outcome,
+                horizontal=True,
             )
-        with col2:
-            graph_learning_candidate = st.selectbox(
-                "Graph learning candidate?",
-                GRAPH_LEARNING_OPTIONS,
-                index=0,
+            clinician_final_response = st.text_area(
+                "Final advice to send",
+                value=draft.get("Suggested response", ""),
+                height=140,
+                placeholder=(
+                    "A few words is enough, e.g. 'Refer to oculoplastics' or "
+                    "'Ask for lid photo, duration, change, bleeding/lash loss'."
+                ),
             )
-        override_reason = st.text_area(
-            "Override / edit reason",
-            value="",
-            height=90,
-            placeholder="Optional, but useful when the tool was edited or overridden.",
-        )
 
-        submitted = st.form_submit_button("Submit clinician feedback and log", type="primary")
+            with st.expander("Optional audit fields"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    tool_use_status = st.selectbox(
+                        "Tool use",
+                        TOOL_USE_STATUS_OPTIONS,
+                        index=0,
+                    )
+                with col2:
+                    graph_learning_candidate = st.selectbox(
+                        "Learning signal",
+                        GRAPH_LEARNING_OPTIONS,
+                        index=1,
+                    )
+                override_reason = st.text_area(
+                    "Optional note",
+                    value="",
+                    height=90,
+                    placeholder="Optional. Use this only if the tool was wrong or missed something important.",
+                )
+
+            submitted = st.form_submit_button("Save feedback and learning signal", type="primary")
 
     if not submitted:
         return
 
-    learning_status = "Pending review" if graph_learning_candidate.startswith("Yes") else "No learning action"
     feedback = {
         "clinician_final_outcome": clinician_final_outcome,
         "clinician_final_response": clinician_final_response.strip(),
         "tool_use_status": tool_use_status,
         "override_reason": override_reason.strip(),
         "graph_learning_candidate": graph_learning_candidate,
-        "learning_status": learning_status,
+        "learning_status": "",
     }
+    learning = graph_learning_payload(question, result, feedback)
+    feedback["graph_learning_candidate"] = learning["learning_candidate"]
+    feedback["learning_status"] = learning["learning_status"]
 
     try:
         log_status = log_to_google_sheet(question, result, feedback)
@@ -866,6 +1080,11 @@ def render_clinician_feedback_form(question, result):
 
     if log_status == "logged":
         st.success("Clinician feedback logged to Google Sheet.")
+        if learning["learning_candidate"].startswith("Yes"):
+            st.info(
+                "Graph learning candidate auto-populated: "
+                f"{learning['learning_candidate']} - {learning['proposed_change_type']}."
+            )
     elif log_status == "not_configured":
         st.info("Google Sheet logging is not configured yet.")
 
@@ -878,6 +1097,7 @@ def main():
 
     st.title("EyeV A&G Tool")
     st.caption("V7.15 / OKG v2.15 feedback-loop prototype. Demo use only. Do not enter patient-identifiable information unless you have local approval.")
+    st.success("Quick clinician sign-off layout active: final outcome + final advice only. Extra audit fields are hidden.")
 
     with st.sidebar:
         st.header("Examples")
