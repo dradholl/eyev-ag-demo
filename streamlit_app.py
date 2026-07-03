@@ -329,8 +329,8 @@ def enforce_safe_review_outcome(result):
         result["Draft Response"] = {
             "Summary": "This topic needs clinician review before safe final advice can be given.",
             "Suggested response": (
-                "Thanks for this. This is not a topic the current A&G tool can advise on confidently yet, so I would like this to be reviewed by a clinician before final advice is sent. "
-                "To help with that review, could you send the main eye problem or question, which eye is affected, vision/VA, how long it has been present, key symptoms, relevant examination findings and any photo/OCT/image if available?"
+                "Thanks for this. To help us advise safely, could you send a little more detail about the main eye problem, which eye is affected, "
+                "vision/VA, how long it has been present, key symptoms, relevant examination findings and any photo/OCT/image if available?"
             ),
             "Safety net": "If there is pain, reduced vision, red eye, rapidly worsening symptoms, neurological symptoms or any other red flag, please refer urgently using the local ophthalmology pathway rather than waiting for advice.",
         }
