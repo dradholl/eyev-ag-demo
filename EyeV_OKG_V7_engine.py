@@ -1453,7 +1453,7 @@ class OKGEngine:
                 "Summary": "This query contains iris/anterior-segment red-flag features.",
                 "Suggested response": (
                     "Thanks for this. The features described need urgent ophthalmology assessment. "
-                    "We will convert this A&G request into an urgent ophthalmology referral. It would be helpful to include VA, IOP, pupil findings, anterior chamber/angle findings and an anterior-segment image if available."
+                    "We will convert this A&G request into an urgent ophthalmology referral. For future A&G requests, it is helpful to include VA, IOP, pupil findings, anterior chamber/angle findings and an anterior-segment image if available."
                 ),
                 "Safety net": "If there is reduced vision, pain, red eye, rubeosis/new iris vessels, hyphaema, pupil distortion or rapid change, this should be managed urgently rather than as routine advice.",
             }
@@ -1463,7 +1463,7 @@ class OKGEngine:
                 "Summary": "This appears to be a referral-level macular OCT structural or fluid concern.",
                 "Suggested response": (
                     "Thanks for this. The OCT description suggests a macular structural/fluid concern, so we will convert this A&G request into a medical-retina referral. "
-                    "It would be helpful to include OCT images, VA, laterality, symptom onset/change, distortion/Amsler status, fundus findings and any previous comparison OCT or macular history."
+                    "For future A&G requests, it is helpful to include OCT images, VA, laterality, symptom onset/change, distortion/Amsler status, fundus findings and any previous comparison OCT or macular history."
                 ),
                 "Safety net": "If there is sudden central vision loss, new distortion, rapidly worsening symptoms, haemorrhage or suspected active wet AMD/CNV, please refer urgently using the local ophthalmology pathway.",
             }
@@ -1473,7 +1473,7 @@ class OKGEngine:
                 "Summary": "This appears to be a retinal inflammatory or white-dot lesion query.",
                 "Suggested response": (
                     "Thanks for this. A retinal inflammatory or white-dot lesion query is best assessed through the local retina pathway, so we will convert this A&G request into a retina referral. "
-                    "It would be helpful to include VA, laterality, onset/duration, symptoms, fundus/OCT images and any systemic or inflammatory history if available."
+                    "For future A&G requests, it is helpful to include VA, laterality, onset/duration, symptoms, fundus/OCT images and any systemic or inflammatory history if available."
                 ),
                 "Safety net": "If there is marked or rapidly worsening vision loss, significant pain, severe inflammation or other acute red flags, please refer urgently using the local pathway.",
             }
@@ -1483,7 +1483,7 @@ class OKGEngine:
                 "Summary": "This appears to be a diabetic macular/OCT abnormality or progression concern.",
                 "Suggested response": (
                     "Thanks for this. The information suggests a diabetic macular/OCT abnormality or progression concern, so we will convert this A&G request into a diabetic medical-retina referral. "
-                    "It would be helpful to include OCT/photographs, VA, laterality, retinopathy/maculopathy grade, previous laser/injections and current screening or HES status where available."
+                    "For future A&G requests, it is helpful to include OCT/photographs, VA, laterality, retinopathy/maculopathy grade, previous laser/injections and current screening or HES status where available."
                 ),
                 "Safety net": "If there are new vessels, vitreous haemorrhage, sudden vision loss or rapidly progressive diabetic eye disease features, please refer urgently using the local pathway.",
             }
@@ -1493,7 +1493,7 @@ class OKGEngine:
                 "Summary": "This appears to be a post-cataract CMO, VMT or cystic macular change concern.",
                 "Suggested response": (
                     "Thanks for this. The post-operative OCT findings suggest possible CMO/VMT or cystic macular change, so we will convert this A&G request into the appropriate post-operative cataract or medical-retina referral. "
-                    "It would be helpful to include OCT images, VA, time since surgery, symptom change, current drops/treatment and whether there are any post-operative infection red flags."
+                    "For future A&G requests, it is helpful to include OCT images, VA, time since surgery, symptom change, current drops/treatment and whether there are any post-operative infection red flags."
                 ),
                 "Safety net": "If there is pain, red eye, photophobia, hypopyon, marked reduced vision or concern about endophthalmitis, please refer urgently using the local post-operative pathway.",
             }
@@ -1503,7 +1503,7 @@ class OKGEngine:
                 "Summary": "This appears to be a glaucoma or optic-nerve structural/visual-field deterioration concern.",
                 "Suggested response": (
                     "Thanks for this. The raised IOP and suspicious disc findings need glaucoma assessment, so we will convert this A&G request into a glaucoma referral. "
-                    "It would be helpful to include IOP values and method, disc/OCT RNFL images, visual-field printouts/reliability, previous comparison and whether the patient is already under HES/glaucoma follow-up."
+                    "For future A&G requests, it is helpful to include IOP values and method, disc/OCT RNFL images, visual-field printouts/reliability, previous comparison and whether the patient is already under HES/glaucoma follow-up."
                 ),
                 "Safety net": "If there are acute angle-closure symptoms, sudden vision loss, painful red eye or rapidly progressive field/optic-nerve change, please refer urgently using the local pathway.",
             }
@@ -1524,7 +1524,7 @@ class OKGEngine:
                 "Summary": "The graph has identified features that may need urgent assessment.",
                 "Suggested response": (
                     "Thanks for this. From the details provided, we will convert this A&G request into an ophthalmology referral. "
-                    "It would be helpful to include symptom onset, VA, laterality, key positive and negative symptoms, relevant examination findings and any images/OCT/photos available."
+                    "For future A&G requests, it is helpful to include symptom onset, VA, laterality, key positive and negative symptoms, relevant examination findings and any images/OCT/photos available."
                 ),
                 "Safety net": "If symptoms are acute, severe, rapidly worsening, or associated with pain, red eye, neurological symptoms or sudden reduced vision, please refer urgently rather than via a routine pathway.",
             }

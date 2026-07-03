@@ -467,7 +467,7 @@ def ensure_draft_response(question, result):
             "Summary": "The information provided suggests ophthalmology assessment is needed.",
             "Suggested response": (
                 "Thanks for this. From the details provided, we will convert this A&G request into an ophthalmology referral. "
-                "It would be helpful to include symptom onset, VA, laterality, key positive and negative symptoms, relevant examination findings and any images/OCT/photos available."
+                "For future A&G requests, it is helpful to include symptom onset, VA, laterality, key positive and negative symptoms, relevant examination findings and any images/OCT/photos available."
             ),
             "Safety net": "If symptoms are acute, severe, rapidly worsening, or associated with pain, red eye, neurological symptoms or sudden reduced vision, please refer urgently rather than via a routine pathway.",
         }
@@ -520,7 +520,7 @@ def soften_draft_response_language(result):
     ):
         draft["Suggested response"] = (
             "Thanks for this. The raised IOP and suspicious disc findings need glaucoma assessment, so we will convert this A&G request into a glaucoma referral. "
-            "It would be helpful to include IOP values and method, disc/OCT RNFL images, visual-field printouts/reliability, previous comparison and whether the patient is already under HES/glaucoma follow-up."
+            "For future A&G requests, it is helpful to include IOP values and method, disc/OCT RNFL images, visual-field printouts/reliability, previous comparison and whether the patient is already under HES/glaucoma follow-up."
         )
         draft["Safety net"] = (
             "If there are acute angle-closure symptoms, sudden vision loss, painful red eye or rapidly progressive field/optic-nerve change, "
@@ -538,7 +538,7 @@ def soften_draft_response_language(result):
     if response.startswith("Convert or escalate"):
         draft["Suggested response"] = (
             "Thanks for this. From the details provided, we will convert this A&G request into an ophthalmology referral. "
-            "It would be helpful to include the symptom history, VA, laterality, relevant positive and negative findings, and any images/OCT/photos available."
+            "For future A&G requests, it is helpful to include the symptom history, VA, laterality, relevant positive and negative findings, and any images/OCT/photos available."
         )
 
     if response.startswith("Please provide:"):
