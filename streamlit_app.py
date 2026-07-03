@@ -47,6 +47,7 @@ SHEET_COLUMNS = [
     "Outcome",
     "Outcome rationale",
     "Suggested response confidence",
+    "Suggested response confidence reason",
     "Top presentation ID",
     "Top presentation",
     "Top presentation confidence",
@@ -61,6 +62,8 @@ SHEET_COLUMNS = [
     "Draft safety net",
     "Clinician final outcome",
     "Clinician final response",
+    "Suggested response helpful",
+    "Clinical reasoning concern",
     "Tool use status",
     "Override / edit reason",
     "Graph learning candidate",
@@ -77,9 +80,12 @@ FEEDBACK_COLUMNS = [
     "Tool suggested outcome",
     "Tool suggested rationale",
     "Suggested response confidence",
+    "Suggested response confidence reason",
     "Tool suggested draft response",
     "Clinician final outcome",
     "Clinician final response",
+    "Suggested response helpful",
+    "Clinical reasoning concern",
     "Tool use status",
     "Override / edit reason",
     "Graph learning candidate",
@@ -102,6 +108,8 @@ REVIEW_QUEUE_COLUMNS = [
     "Reviewer category",
     "Outcome ID",
     "Outcome",
+    "Suggested response confidence",
+    "Suggested response confidence reason",
     "Top presentation ID",
     "Top presentation",
     "Detected feature IDs",
@@ -111,6 +119,7 @@ REVIEW_QUEUE_COLUMNS = [
     "Clinician reviewer",
     "Clinician response",
     "Clinician outcome",
+    "Suggested response helpful",
     "Reviewer notes",
     "Graph update needed",
 ]
@@ -739,6 +748,7 @@ def empty_feedback():
     return {
         "clinician_final_outcome": "",
         "clinician_final_response": "",
+        "suggestion_helpful": "",
         "tool_use_status": "",
         "override_reason": "",
         "graph_learning_candidate": "",
@@ -987,7 +997,7 @@ def result_to_sheet_row(question, result, feedback=None):
     top_presentation = presentations[0] if presentations else {}
     draft = result.get("Draft Response", {})
     needs_review, review_reason, review_status, reviewer_category = clinician_review_flags(result)
-    confidence, _confidence_reason = suggested_response_confidence(result)
+    confidence, confidence_reason = suggested_response_confidence(result)
 
     return [
         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -997,18 +1007,19 @@ def result_to_sheet_row(question, result, feedback=None):
         review_status,
         reviewer_category,
         "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
+        feedback.get("clinician_final_response", ""),
+        feedback.get("clinician_final_outcome", ""),
+        learning["learning_candidate"],
+        learning["proposed_new_feature"],
+        learning["proposed_new_presentation"],
+        learning["proposed_missing_info"],
+        learning["proposed_safety_condition"],
+        learning["proposed_validation_case"],
         outcome.get("Outcome ID", ""),
         outcome.get("Outcome", ""),
         outcome.get("Rationale", ""),
         confidence,
+        confidence_reason,
         top_presentation.get("Presentation ID", ""),
         top_presentation.get("Presentation", ""),
         top_presentation.get("Confidence", ""),
@@ -1023,6 +1034,8 @@ def result_to_sheet_row(question, result, feedback=None):
         draft.get("Safety net", ""),
         feedback.get("clinician_final_outcome", ""),
         feedback.get("clinician_final_response", ""),
+        feedback.get("suggestion_helpful", ""),
+        "Yes" if feedback.get("reasoning_not_satisfactory") else "No",
         feedback.get("tool_use_status", ""),
         feedback.get("override_reason", ""),
         learning["learning_candidate"],
@@ -1041,6 +1054,7 @@ def result_to_review_queue_row(question, result, feedback=None):
     top_presentation = presentations[0] if presentations else {}
     draft = result.get("Draft Response", {})
     needs_review, review_reason, review_status, reviewer_category = clinician_review_flags(result)
+    confidence, confidence_reason = suggested_response_confidence(result)
 
     return [
         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -1051,6 +1065,8 @@ def result_to_review_queue_row(question, result, feedback=None):
         reviewer_category,
         outcome.get("Outcome ID", ""),
         outcome.get("Outcome", ""),
+        confidence,
+        confidence_reason,
         top_presentation.get("Presentation ID", ""),
         top_presentation.get("Presentation", ""),
         join_values(result.get("Detected Features", []), "Feature ID"),
@@ -1060,7 +1076,8 @@ def result_to_review_queue_row(question, result, feedback=None):
         "",
         feedback.get("clinician_final_response", ""),
         feedback.get("clinician_final_outcome", ""),
-        "",
+        feedback.get("suggestion_helpful", ""),
+        feedback.get("override_reason", ""),
         learning["proposed_change_type"] or "",
     ]
 
@@ -1098,7 +1115,7 @@ def result_to_feedback_row(question, result, feedback):
     presentations = result.get("Presentation Ranking", [])
     top_presentation = presentations[0] if presentations else {}
     draft = result.get("Draft Response", {})
-    confidence, _confidence_reason = suggested_response_confidence(result)
+    confidence, confidence_reason = suggested_response_confidence(result)
 
     return [
         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -1107,9 +1124,12 @@ def result_to_feedback_row(question, result, feedback):
         outcome.get("Outcome", ""),
         outcome.get("Rationale", ""),
         confidence,
+        confidence_reason,
         draft.get("Suggested response", ""),
         feedback.get("clinician_final_outcome", ""),
         feedback.get("clinician_final_response", ""),
+        feedback.get("suggestion_helpful", ""),
+        "Yes" if feedback.get("reasoning_not_satisfactory") else "No",
         feedback.get("tool_use_status", ""),
         feedback.get("override_reason", ""),
         learning["learning_candidate"],
@@ -1202,16 +1222,77 @@ def diagnostic_log_row():
     return row
 
 
+def diagnostic_row(headers, values):
+    row = [""] * len(headers)
+    for column, value in values.items():
+        if column in headers:
+            row[headers.index(column)] = value
+    return row
+
+
 def run_logging_diagnostic():
     if not st.secrets.get("GOOGLE_APPS_SCRIPT_URL", ""):
         return "Google Apps Script URL is not configured in Streamlit secrets."
 
-    append_with_apps_script([{
-        "name": "A&G Log",
-        "headers": SHEET_COLUMNS,
-        "row": diagnostic_log_row(),
-    }])
-    return "Diagnostic row sent to Google Sheet."
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    append_with_apps_script([
+        {
+            "name": "A&G Log",
+            "headers": SHEET_COLUMNS,
+            "row": diagnostic_log_row(),
+        },
+        {
+            "name": "Clinician Review Queue",
+            "headers": REVIEW_QUEUE_COLUMNS,
+            "row": diagnostic_row(REVIEW_QUEUE_COLUMNS, {
+                "Timestamp": timestamp,
+                "Question": "DIAGNOSTIC TEST - review queue logging",
+                "Needs clinician review": "Yes",
+                "Review reason": "Diagnostic test row",
+                "Review status": "Diagnostic",
+                "Reviewer category": "System test",
+                "Suggested response confidence": "Low",
+                "Suggested response confidence reason": "Diagnostic test row",
+                "Clinician response": "If this row appears, review queue logging works.",
+                "Clinician outcome": "TEST",
+                "Suggested response helpful": "Diagnostic",
+                "Reviewer notes": "Diagnostic test",
+                "Graph update needed": "Diagnostic",
+            }),
+        },
+        {
+            "name": "Graph Update Candidates",
+            "headers": GRAPH_CANDIDATE_COLUMNS,
+            "row": diagnostic_row(GRAPH_CANDIDATE_COLUMNS, {
+                "Candidate timestamp": timestamp,
+                "Source question": "DIAGNOSTIC TEST - graph candidate logging",
+                "Candidate status": "Diagnostic",
+                "Candidate reason": "Diagnostic test row",
+                "Reviewer category": "System test",
+                "Proposed change type": "Diagnostic",
+                "Clinician response": "If this row appears, graph candidate logging works.",
+            }),
+        },
+        {
+            "name": "Clinician Feedback",
+            "headers": FEEDBACK_COLUMNS,
+            "row": diagnostic_row(FEEDBACK_COLUMNS, {
+                "Timestamp": timestamp,
+                "Question": "DIAGNOSTIC TEST - clinician feedback logging",
+                "Tool suggested outcome ID": "TEST",
+                "Tool suggested outcome": "Diagnostic logging test",
+                "Suggested response confidence": "High",
+                "Suggested response confidence reason": "Diagnostic test row",
+                "Tool suggested draft response": "If this row appears, clinician feedback logging works.",
+                "Clinician final outcome": "TEST",
+                "Clinician final response": "Diagnostic test",
+                "Suggested response helpful": "Diagnostic",
+                "Clinical reasoning concern": "No",
+                "Tool use status": "Diagnostic",
+            }),
+        },
+    ])
+    return "Diagnostic rows sent to all Google Sheet tabs."
 
 
 def outcome_colour(outcome_id):
@@ -1320,7 +1401,7 @@ def render_missing_info(items):
 
 def render_confidence_badge(confidence):
     styles = {
-        "High": ("OK", "#e6f4ea", "#137333"),
+        "High": ("✓", "#e6f4ea", "#137333"),
         "Medium": ("!", "#fff4e5", "#a15c00"),
         "Low": ("!", "#fdecea", "#b3261e"),
     }
@@ -1402,6 +1483,7 @@ def render_clinician_feedback_form(question, result):
     feedback = {
         "clinician_final_outcome": outcome_log_label(clinician_final_outcome),
         "clinician_final_response": clinician_final_response.strip(),
+        "suggestion_helpful": "No - needs improvement" if suggestion_helpful in ("Needs improvement", "Needs improvement") else "Yes - helpful",
         "tool_use_status": "",
         "override_reason": override_reason.strip(),
         "graph_learning_candidate": internal_learning_signal(graph_learning_candidate),
