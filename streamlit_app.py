@@ -419,24 +419,27 @@ def ensure_draft_response(question, result):
             info = "clinical question, laterality, VA, symptom duration, relevant positive/negative symptoms, examination findings and images/OCT/photos where available"
         result["Draft Response"] = {
             "Summary": "More information is needed before final advice can be given.",
-            "Suggested response": f"Please provide: {info}.",
-            "Safety net": "If there are urgent symptoms or red flags, use the relevant urgent pathway rather than waiting for advice.",
+            "Suggested response": f"Thanks for this. To advise safely, please could you provide: {info}.",
+            "Safety net": "If there are urgent symptoms or red flags, please use the relevant urgent pathway rather than waiting for advice.",
         }
     elif outcome.get("Outcome ID") == "OUT003":
         result["Draft Response"] = {
             "Summary": "The graph has identified a potentially urgent presentation.",
-            "Suggested response": "Convert or escalate according to the relevant local urgent ophthalmology pathway.",
-            "Safety net": "Document onset, VA, laterality, symptoms and relevant examination findings.",
+            "Suggested response": (
+                "Thanks for this. Based on the information provided, this should be referred for ophthalmology assessment using the relevant local pathway. "
+                "Please include symptom onset, VA, laterality, key positive and negative symptoms, relevant examination findings and any images/OCT/photos available."
+            ),
+            "Safety net": "If symptoms are acute, severe, rapidly worsening, or associated with pain, red eye, neurological symptoms or sudden reduced vision, please use the urgent pathway rather than a routine referral.",
         }
     else:
         presentation_text = top.get("Presentation", "the supplied information")
         result["Draft Response"] = {
             "Summary": f"The graph suggests this can be handled as advice-only based on {presentation_text}.",
             "Suggested response": (
-                "Return advice only if the supplied information is complete and there are no red flags. "
-                "If key clinical details are missing, request those details before issuing final advice."
+                "Thanks for this. Based on the information provided, this can be managed with advice to the referrer, provided there are no red-flag symptoms or examination findings. "
+                "If key clinical details are missing, please request those details before issuing final advice."
             ),
-            "Safety net": "Advise urgent re-contact/referral if symptoms worsen or red-flag symptoms develop.",
+            "Safety net": "Please advise the patient to seek urgent reassessment if symptoms worsen, vision drops, pain/redness develops, or any other red flags appear.",
         }
 
     return result

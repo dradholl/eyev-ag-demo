@@ -1450,16 +1450,19 @@ class OKGEngine:
         if top_presentation_id == "PR055":
             return {
                 "Summary": "This query contains iris/anterior-segment red-flag features.",
-                "Suggested response": "Convert or escalate according to the local urgent anterior-segment pathway.",
-                "Safety net": "Document VA, IOP, pupil, anterior chamber/angle findings and attach anterior-segment imaging if available.",
+                "Suggested response": (
+                    "Thanks for this. The features described need urgent ophthalmology assessment. "
+                    "Please arrange referral using your local urgent anterior-segment pathway, and include VA, IOP, pupil findings, anterior chamber/angle findings and an anterior-segment image if available."
+                ),
+                "Safety net": "If there is reduced vision, pain, red eye, rubeosis/new iris vessels, hyphaema, pupil distortion or rapid change, this should be managed urgently rather than as routine advice.",
             }
 
         if top_presentation_id == "PR060":
             return {
                 "Summary": "This appears to be a referral-level macular OCT structural or fluid concern.",
                 "Suggested response": (
-                    "Clinician to convert to the appropriate local medical-retina pathway. Include OCT images, VA, laterality, "
-                    "symptom onset/change, distortion/Amsler status, fundus findings and any previous comparison OCT or macular history."
+                    "Thanks for this. The OCT description suggests a macular structural/fluid concern that should be referred for medical-retina review in line with the local pathway. "
+                    "Please include OCT images, VA, laterality, symptom onset/change, distortion/Amsler status, fundus findings and any previous comparison OCT or macular history."
                 ),
                 "Safety net": "Escalate urgently if there is sudden central vision loss, new distortion, rapidly worsening symptoms, haemorrhage or suspected active wet AMD/CNV.",
             }
@@ -1468,8 +1471,8 @@ class OKGEngine:
             return {
                 "Summary": "This appears to be a retinal inflammatory or white-dot lesion query.",
                 "Suggested response": (
-                    "Clinician to convert to the appropriate local retina pathway. Include VA, laterality, onset/duration, symptoms, "
-                    "fundus/OCT images and any systemic or inflammatory history if available."
+                    "Thanks for this. A retinal inflammatory or white-dot lesion query is best assessed through the local retina pathway. "
+                    "Please refer and include VA, laterality, onset/duration, symptoms, fundus/OCT images and any systemic or inflammatory history if available."
                 ),
                 "Safety net": "Use the urgent pathway if there is marked or rapidly worsening vision loss, significant pain, severe inflammation or other acute red flags.",
             }
@@ -1478,8 +1481,8 @@ class OKGEngine:
             return {
                 "Summary": "This appears to be a diabetic macular/OCT abnormality or progression concern.",
                 "Suggested response": (
-                    "Clinician to convert to the appropriate local diabetic medical-retina pathway. Include OCT/photographs, VA, laterality, "
-                    "retinopathy/maculopathy grade, previous laser/injections and current screening or HES status where available."
+                    "Thanks for this. The information suggests a diabetic macular/OCT abnormality or progression concern, so referral through the local diabetic medical-retina pathway would be appropriate. "
+                    "Please include OCT/photographs, VA, laterality, retinopathy/maculopathy grade, previous laser/injections and current screening or HES status where available."
                 ),
                 "Safety net": "Escalate urgently if there are new vessels, vitreous haemorrhage, sudden vision loss or rapidly progressive diabetic eye disease features.",
             }
@@ -1488,8 +1491,8 @@ class OKGEngine:
             return {
                 "Summary": "This appears to be a post-cataract CMO, VMT or cystic macular change concern.",
                 "Suggested response": (
-                    "Clinician to convert to the relevant post-operative cataract or medical-retina pathway. Include OCT images, VA, "
-                    "time since surgery, symptom change, current drops/treatment and whether there are any post-operative infection red flags."
+                    "Thanks for this. The post-operative OCT findings suggest possible CMO/VMT or cystic macular change, so referral through the local post-operative cataract or medical-retina pathway would be appropriate. "
+                    "Please include OCT images, VA, time since surgery, symptom change, current drops/treatment and whether there are any post-operative infection red flags."
                 ),
                 "Safety net": "Use the urgent post-operative pathway if there is pain, red eye, photophobia, hypopyon, marked reduced vision or concern about endophthalmitis.",
             }
@@ -1498,8 +1501,8 @@ class OKGEngine:
             return {
                 "Summary": "This appears to be a glaucoma or optic-nerve structural/visual-field deterioration concern.",
                 "Suggested response": (
-                    "Clinician to convert to the appropriate local glaucoma pathway. Include IOP values and method, disc/OCT RNFL images, "
-                    "visual-field printouts/reliability, previous comparison and whether the patient is already under HES/glaucoma follow-up."
+                    "Thanks for this. The field/disc/OCT information suggests possible glaucoma or optic-nerve progression, so referral or review through the local glaucoma pathway would be appropriate. "
+                    "Please include IOP values and method, disc/OCT RNFL images, visual-field printouts/reliability, previous comparison and whether the patient is already under HES/glaucoma follow-up."
                 ),
                 "Safety net": "Use the urgent pathway if there are acute angle-closure symptoms, sudden vision loss, painful red eye or rapidly progressive field/optic-nerve change.",
             }
@@ -1507,22 +1510,25 @@ class OKGEngine:
         if outcome_id == "OUT003":
             return {
                 "Summary": "The graph has identified features that may need urgent assessment.",
-                "Suggested response": "Convert or escalate according to the relevant local urgent ophthalmology pathway.",
-                "Safety net": "Check and document symptom onset, VA, laterality, red-flag symptoms and relevant examination findings.",
+                "Suggested response": (
+                    "Thanks for this. Based on the information provided, this should be referred for ophthalmology assessment using the relevant local pathway. "
+                    "Please include symptom onset, VA, laterality, key positive and negative symptoms, relevant examination findings and any images/OCT/photos available."
+                ),
+                "Safety net": "If symptoms are acute, severe, rapidly worsening, or associated with pain, red eye, neurological symptoms or sudden reduced vision, please use the urgent pathway rather than a routine referral.",
             }
 
         if outcome_id == "OUT002":
             info = ", ".join(item["Missing Information"] for item in missing_info) if missing_info else "clear clinical details, key symptoms, VA, laterality, relevant examination findings and images/OCT/photos where available"
             return {
                 "Summary": "The graph needs more information before giving advice.",
-                "Suggested response": f"Please provide: {info}.",
-                "Safety net": "If there are new severe symptoms, reduced vision, pain, red eye, neurological symptoms or other red flags, use the relevant urgent pathway rather than waiting for advice.",
+                "Suggested response": f"Thanks for this. To advise safely, please could you provide: {info}.",
+                "Safety net": "If there are new severe symptoms, reduced vision, pain, red eye, neurological symptoms or other red flags, please use the relevant urgent pathway rather than waiting for advice.",
             }
 
         return {
             "Summary": "The graph did not identify a high-risk presentation from the supplied text.",
-            "Suggested response": "Return advice only if the referrer has provided enough clinical detail and no red flags are present.",
-            "Safety net": "Advise re-contact or urgent referral if symptoms worsen or red-flag symptoms develop.",
+            "Suggested response": "Thanks for this. Based on the information provided, this can be managed with advice to the referrer, provided there are no red-flag symptoms or examination findings.",
+            "Safety net": "Please advise the patient to seek urgent reassessment if symptoms worsen, vision drops, pain/redness develops, or any other red flags appear.",
         }
 
     def _outcome(self, outcome_id, rationale):
