@@ -1474,14 +1474,14 @@ def render_clinician_feedback_form(question, result):
 
         suggestion_helpful = st.radio(
             "Was the suggested response helpful?",
-            ["Helpful", "Needs improvement"],
+            ["👍 Helpful", "👎 Needs improvement"],
             horizontal=True,
         )
         graph_learning_candidate = "No, this was fine"
         override_reason = ""
         reasoning_not_satisfactory = False
 
-        if suggestion_helpful == "Needs improvement":
+        if suggestion_helpful == "👎 Needs improvement":
             reasoning_not_satisfactory = True
             graph_learning_candidate = st.selectbox(
                 "What would improve it?",
@@ -1503,7 +1503,7 @@ def render_clinician_feedback_form(question, result):
     feedback = {
         "clinician_final_outcome": outcome_log_label(clinician_final_outcome),
         "clinician_final_response": clinician_final_response.strip(),
-        "suggestion_helpful": "No - needs improvement" if suggestion_helpful in ("Needs improvement", "Needs improvement") else "Yes - helpful",
+        "suggestion_helpful": "No - needs improvement" if suggestion_helpful in ("👎 Needs improvement", "Needs improvement") else "Yes - helpful",
         "tool_use_status": "",
         "override_reason": override_reason.strip(),
         "graph_learning_candidate": internal_learning_signal(graph_learning_candidate),
@@ -1582,4 +1582,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
