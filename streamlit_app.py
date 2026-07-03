@@ -455,10 +455,54 @@ def ensure_draft_response(question, result):
     return result
 
 
+def soften_draft_response_language(result):
+    draft = result.get("Draft Response")
+    if not draft:
+        return result
+
+    response = str(draft.get("Suggested response", "") or "").strip()
+    safety_net = str(draft.get("Safety net", "") or "").strip()
+
+    if response.startswith("Please provide:"):
+        details = response.replace("Please provide:", "", 1).strip().rstrip(".")
+        if details:
+            draft["Suggested response"] = (
+                "Thanks for this. I can advise more safely with a little more detail. "
+                f"Could you send {details}"
+            )
+            if not draft["Suggested response"].endswith((".", "?")):
+                draft["Suggested response"] += "?"
+
+    elif response.startswith("Please provide "):
+        details = response.replace("Please provide ", "", 1).strip().rstrip(".")
+        if details:
+            draft["Suggested response"] = (
+                "Thanks for this. I can advise more safely with a little more detail. "
+                f"Could you send {details}"
+            )
+            if not draft["Suggested response"].endswith((".", "?")):
+                draft["Suggested response"] += "?"
+
+    if "use the relevant urgent pathway" in safety_net:
+        draft["Safety net"] = safety_net.replace(
+            "use the relevant urgent pathway",
+            "please refer urgently using the local ophthalmology pathway",
+        )
+    if "please use the relevant urgent pathway" in safety_net:
+        draft["Safety net"] = safety_net.replace(
+            "please use the relevant urgent pathway",
+            "please refer urgently using the local ophthalmology pathway",
+        )
+
+    result["Draft Response"] = draft
+    return result
+
+
 def prepare_result_for_display(question, result):
     result = apply_glaucoma_drop_advice(question, result)
     result = enforce_safe_review_outcome(result)
     result = ensure_draft_response(question, result)
+    result = soften_draft_response_language(result)
     result = normalise_outcome_label(result)
     return result
 
