@@ -327,12 +327,13 @@ def enforce_safe_review_outcome(result):
 
     if needs_review == "Yes" and not result.get("Draft Response"):
         result["Draft Response"] = {
-            "Summary": "This topic is not yet covered confidently by the structured EyeV graph.",
+            "Summary": "This topic needs clinician review before safe final advice can be given.",
             "Suggested response": (
-                "This requires clinician review before final advice. Please provide the clinical question, laterality, VA, symptom duration, "
-                "key positive and negative symptoms, relevant examination findings and images/photos/OCT where available."
+                "Thanks for this. I would like to review this before giving final advice. "
+                "Could you send the clinical question, laterality, VA, symptom duration, key positive and negative symptoms, "
+                "relevant examination findings and images/photos/OCT where available?"
             ),
-            "Safety net": "If there is pain, reduced vision, red eye, rapidly worsening symptoms, neurological symptoms or other red flags, use the relevant urgent pathway.",
+            "Safety net": "If there is pain, reduced vision, red eye, rapidly worsening symptoms, neurological symptoms or other red flags, please refer urgently using the local ophthalmology pathway.",
         }
 
     return result
@@ -389,17 +390,17 @@ def apply_glaucoma_drop_advice(question, result):
                 "Missing Information": text,
             })
 
-    result["Draft Response"] = {
-        "Summary": "This appears to be a glaucoma drop adherence / IOP review query.",
-        "Suggested response": (
-            "Based on the information provided, this sounds primarily like difficulty with glaucoma drop instillation/adherence rather than an acute glaucoma presentation. "
-            "Reasonable support would be to check drop technique, simplify the practical routine where possible, involve a carer if appropriate, and consider a compliance aid/drop dispenser. "
-        ),
-        "Safety net": (
-            "If IOP is very high, there is eye pain/redness, corneal haze, halos, nausea/vomiting, sudden vision loss, or marked progression/new symptoms, "
-            "use the urgent local glaucoma/ophthalmology pathway."
-        ),
-    }
+        result["Draft Response"] = {
+            "Summary": "This appears to be a glaucoma drop adherence / IOP review query.",
+            "Suggested response": (
+                "Thanks for this. From the information provided, this sounds primarily like difficulty with glaucoma drop instillation/adherence rather than an acute glaucoma presentation. "
+                "Reasonable support would be to check drop technique, simplify the practical routine where possible, involve a carer if appropriate, and consider a compliance aid/drop dispenser."
+            ),
+            "Safety net": (
+                "If IOP is very high, there is eye pain/redness, corneal haze, halos, nausea/vomiting, sudden vision loss, or marked progression/new symptoms, "
+                "please refer urgently using the local glaucoma/ophthalmology pathway."
+            ),
+        }
     result["Review Override"] = "glaucoma_adherence_advice"
     return result
 
@@ -427,25 +428,25 @@ def ensure_draft_response(question, result):
         if not info:
             info = "clinical question, laterality, VA, symptom duration, relevant positive/negative symptoms, examination findings and images/OCT/photos where available"
         result["Draft Response"] = {
-            "Summary": "More information is needed before final advice can be given.",
-            "Suggested response": f"Thanks for this. To advise safely, please could you provide: {info}.",
-            "Safety net": "If there are urgent symptoms or red flags, please use the relevant urgent pathway rather than waiting for advice.",
+            "Summary": "More information is needed before safe advice can be given.",
+            "Suggested response": f"Thanks for this. I can advise more safely with a little more detail. Could you send {info}?",
+            "Safety net": "If there are urgent symptoms or red flags, please refer urgently using the local ophthalmology pathway rather than waiting for advice.",
         }
     elif outcome.get("Outcome ID") == "OUT003":
         result["Draft Response"] = {
-            "Summary": "The graph has identified a potentially urgent presentation.",
+            "Summary": "The information provided suggests ophthalmology assessment is needed.",
             "Suggested response": (
-                "Thanks for this. Based on the information provided, this should be referred for ophthalmology assessment using the relevant local pathway. "
-                "Please include symptom onset, VA, laterality, key positive and negative symptoms, relevant examination findings and any images/OCT/photos available."
+                "Thanks for this. From the details provided, this needs ophthalmology assessment. "
+                "Please refer using the appropriate local pathway and include symptom onset, VA, laterality, key positive and negative symptoms, relevant examination findings and any images/OCT/photos available."
             ),
-            "Safety net": "If symptoms are acute, severe, rapidly worsening, or associated with pain, red eye, neurological symptoms or sudden reduced vision, please use the urgent pathway rather than a routine referral.",
+            "Safety net": "If symptoms are acute, severe, rapidly worsening, or associated with pain, red eye, neurological symptoms or sudden reduced vision, please refer urgently rather than via a routine pathway.",
         }
     else:
         presentation_text = top.get("Presentation", "the supplied information")
         result["Draft Response"] = {
-            "Summary": f"The graph suggests this can be handled as advice-only based on {presentation_text}.",
+            "Summary": f"This looks suitable for advice back to the referrer based on {presentation_text}.",
             "Suggested response": (
-                "Thanks for this. Based on the information provided, this can be managed with advice to the referrer, provided there are no red-flag symptoms or examination findings. "
+                "Thanks for this. From the information provided, this sounds suitable for advice back to the referrer, provided there are no red-flag symptoms or concerning examination findings. "
                 "If key clinical details are missing, please request those details before issuing final advice."
             ),
             "Safety net": "Please advise the patient to seek urgent reassessment if symptoms worsen, vision drops, pain/redness develops, or any other red flags appear.",
