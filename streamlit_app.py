@@ -1140,21 +1140,27 @@ def render_clinician_feedback_form(question, result):
                 ),
             )
 
-            with st.expander("Optional: help improve future suggestions"):
+            suggestion_helpful = st.radio(
+                "Was the suggested response helpful?",
+                ["👍 Helpful", "👎 Needs improvement"],
+                horizontal=True,
+            )
+            graph_learning_candidate = "No, this was fine"
+            override_reason = ""
+            reasoning_not_satisfactory = False
+
+            if suggestion_helpful == "👎 Needs improvement":
+                reasoning_not_satisfactory = True
                 graph_learning_candidate = st.selectbox(
-                    "Does this case show something the tool should learn?",
+                    "What would improve it?",
                     GRAPH_LEARNING_OPTIONS,
                     index=0,
                 )
                 override_reason = st.text_area(
-                    "Comment",
+                    "Why was it not helpful?",
                     value="",
                     height=90,
-                    placeholder="Optional. For example: missed lid lump wording, should have suggested referral, or asked for a photo.",
-                )
-                reasoning_not_satisfactory = st.checkbox(
-                    "The clinical reasoning was not satisfactory",
-                    value=False,
+                    placeholder="A few words is enough. For example: missed lid lump wording, should have suggested referral, or should ask for a photo.",
                 )
 
             submitted = st.form_submit_button("Save clinician response", type="primary")
