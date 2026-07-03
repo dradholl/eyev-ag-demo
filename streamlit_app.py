@@ -155,6 +155,74 @@ OUTCOME_DISPLAY_LABELS = {
     "OUT003": "Clinician converts to referral",
 }
 
+PLAIN_MISSING_INFO_LABELS = {
+    "Visual acuity": "current vision/VA",
+    "Duration of symptoms": "when the symptoms started and whether they are changing",
+    "Field defect status": "whether there is any curtain, shadow or missing area of vision",
+    "Dilated fundus view": "whether a dilated retinal examination was performed and what was seen",
+    "OCT image / scan attached": "the OCT image or scan report",
+    "Laterality": "which eye is affected",
+    "Distortion / Amsler status": "whether there is distortion, wavy vision or an abnormal Amsler result",
+    "Previous AMD / macular history": "any previous AMD, macular history, injections or comparison OCT",
+    "Fundus findings / macular appearance": "fundus findings, including any haemorrhage, exudate or macular abnormality",
+    "IOP values and method": "IOP readings, which eye, how they were measured and whether they were repeated",
+    "Optic disc assessment / images": "disc appearance, C/D ratio and any OCT RNFL or disc photos",
+    "Visual field test reliability / progression": "visual-field results, reliability and whether any defect is repeatable or progressing",
+    "Angle closure symptoms": "whether there is eye pain, halos, nausea/vomiting, headache, red eye or pupil symptoms",
+    "Glaucoma family history / risk factors": "family history and other glaucoma risk factors",
+    "Current glaucoma drops / adherence": "current glaucoma drops, prescribed frequency, adherence and any difficulty instilling them",
+    "Contact lens wear status": "whether the patient wears contact lenses and whether they have stopped wearing them",
+    "Corneal staining / infiltrate / opacity": "fluorescein staining, epithelial defect, infiltrate or corneal opacity findings",
+    "Photophobia and pain severity": "whether there is light sensitivity and how severe the pain is",
+    "Anterior chamber reaction": "whether there are cells/flare or anterior chamber inflammation",
+    "Discharge and infective symptoms": "whether there is discharge, sticky eye, watering or infective symptoms",
+    "Functional impact / driving and glare symptoms": "impact on daily activities, reading, driving, glare or work",
+    "Cataract laterality and severity": "which eye is affected and the cataract grade/severity",
+    "Previous cataract surgery date / lens status": "date of cataract surgery, which eye was operated on and lens implant/pseudophakia details",
+    "Post-operative pain/redness/vision status": "post-operative vision and whether there is pain, redness, discharge or light sensitivity",
+    "Ocular comorbidity / fundus view": "macular, glaucoma or other eye comorbidity and fundus view findings",
+    "Lid lesion photograph": "a clinical photograph of the eyelid lesion or lid position",
+    "Lid lesion duration and growth": "how long the lid lesion has been present and whether it is growing, changing or recurrent",
+    "Lid lesion red flags": "whether there is ulceration, bleeding, lash loss, pigmentation, irregular margin or pain",
+    "Orbital/neuro symptoms": "whether there is proptosis, double vision, pain on eye movement, restricted eye movement, reduced vision or systemic symptoms",
+    "Effect on vision / ocular surface": "whether the lid problem affects vision, cornea, tearing, exposure or the ocular surface",
+    "Diabetic retinopathy grade / screening result": "diabetic retinopathy/maculopathy grade or screening result",
+    "Macular OCT / DMO status": "OCT findings and whether there is diabetic macular oedema or macular thickening",
+    "Diabetes control / systemic risk context": "HbA1c, blood pressure, duration of diabetes and relevant systemic risk factors",
+    "Previous diabetic retina treatment": "previous PRP, focal laser, injections or retina clinic treatment",
+    "Diplopia onset and pattern": "onset, duration and whether the double vision is monocular/binocular or variable",
+    "Ocular motility findings": "eye movement findings, cover test/deviation and affected gaze direction",
+    "Neurological symptoms / pupil / ptosis": "whether there is headache, neurological symptoms, pupil abnormality, ptosis or pain",
+    "Child age and visual acuity / amblyopia status": "child's age, VA/fixation, amblyopia history and previous orthoptic care",
+    "Current visual acuity and functional impact": "current VA and effect on daily activities",
+    "Diagnosis stability and progression": "the known diagnosis, whether it is stable or progressing, and any recent change",
+    "Existing follow-up / referral status": "whether the patient is already under HES, has an appointment or has an active referral",
+    "Current treatment and self-care tried": "current drops, lubricants, lid hygiene, spectacles or optometry treatment already tried",
+    "PVD symptom onset and progression": "onset, duration, laterality and whether flashes/floaters are changing",
+    "Dilated retinal examination / peripheral view": "dilated peripheral retinal examination findings, including widefield imaging or indentation if done",
+    "Shafer sign / vitreous haemorrhage status": "whether there is Shafer sign/tobacco dust, pigment cells or vitreous haemorrhage",
+    "Retinal risk history": "previous retinal detachment/tear/laser, high myopia, lattice, aphakia or trauma history",
+    "Retinal tear treatment details": "retinal tear/hole treatment date, eye, treatment type and follow-up plan",
+    "Referral identifiers and dates": "referral ID, date sent, pathway/provider, urgency and confirmation received",
+    "Existing HES team and appointment status": "responsible HES team, last seen date, planned follow-up and next appointment status",
+    "Patient contact and access needs": "best contact details and any travel, accessibility or appointment access needs",
+    "Clinical change since referral / while waiting": "whether vision, pain, symptoms or other concerns have changed while waiting",
+    "Post-cataract symptom negation / red-flag status": "whether there is pain, redness, light sensitivity, discharge, reduced vision or inflammation after cataract surgery",
+    "Post-cataract operative details / discharge information": "operation date, eye, provider, complications, lens details, discharge letter and post-op drops",
+    "Post-cataract OCT / CMO status": "OCT findings, whether cystoid macular oedema/fluid is present, how vision is affected and whether retina/HES are already monitoring",
+    "Disc appearance, laterality and images / OCT comparison": "which eye, disc appearance, disc photos/OCT and any comparison with previous images",
+    "Papilloedema symptom screen": "whether there are headaches, transient visual obscurations, pulsatile tinnitus, vomiting or double vision",
+    "Neuro-ophthalmic visual function": "colour vision, visual fields, pupils and any neuro-ophthalmic symptoms",
+    "Previous HES optic nerve review and stability": "previous HES optic nerve review outcome and whether the appearance is stable",
+    "Iris lesion description and image": "iris lesion photo, size, location, colour, elevation, vessels and whether it is changing",
+    "Anterior segment safety screen": "VA, IOP, pupil, anterior chamber/angle findings and whether there is pain, redness, photophobia, hyphaema or rubeosis",
+    "Retinal lesion image, size, elevation and change": "photo/OCT, lesion size, location, whether it is flat/elevated, symptoms and whether it is new or changing",
+    "Watering severity, TEAR score and intervention preference": "watering severity, laterality, duration, lid/ocular surface findings and whether the patient would consider intervention",
+    "Corneal findings, contact lens status and refraction advice context": "corneal appearance, staining, symptoms, contact lens wear, VA/refraction and whether new glasses should be avoided",
+    "Macular OCT images, VA, symptoms and change over time": "OCT images, VA, which eye, symptoms, duration, fundus findings and previous comparison scans",
+    "Diabetic OCT, VA, retinopathy grade and previous treatment": "OCT/photos, VA, retinopathy or maculopathy grade, previous laser/injections and screening/HES status",
+}
+
 LEARNING_SIGNAL_MAP = {
     "Decide from my final response": "Auto-detect from final response",
     "Work this out from my response": "Auto-detect from final response",
@@ -283,6 +351,65 @@ def append_with_apps_script(sheets):
 
 def join_values(items, key):
     return "; ".join(str(item.get(key, "")) for item in items if item.get(key, ""))
+
+
+def plain_missing_information(text):
+    text = str(text or "").strip()
+    if not text:
+        return ""
+    if text in PLAIN_MISSING_INFO_LABELS:
+        return PLAIN_MISSING_INFO_LABELS[text]
+    cleaned = text
+    replacements = {
+        "symptom negation / red-flag status": "whether concerning symptoms are present or absent",
+        "red-flag status": "whether any concerning symptoms are present",
+        "red flags": "concerning symptoms",
+        "red-flag": "concerning",
+        "positive and negative symptoms": "symptoms that are present and symptoms that are absent",
+        "status": "details",
+        "Laterality": "which eye is affected",
+        "VA": "vision/VA",
+    }
+    for old, new in replacements.items():
+        cleaned = cleaned.replace(old, new)
+    return cleaned[:1].lower() + cleaned[1:] if cleaned else cleaned
+
+
+def plain_missing_information_list(items):
+    values = []
+    for item in items:
+        value = plain_missing_information(item.get("Missing Information", ""))
+        if value and value not in values:
+            values.append(value)
+    return values
+
+
+def join_plain_request_items(items):
+    items = [str(item).strip().rstrip(".") for item in items if str(item).strip()]
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    if len(items) == 2:
+        return f"{items[0]} and {items[1]}"
+    return ", ".join(items[:-1]) + f", and {items[-1]}"
+
+
+def plainify_request_details(details):
+    text = str(details or "").strip().rstrip(".?")
+    if not text:
+        return ""
+    parts = [part.strip() for part in text.split(",") if part.strip()]
+    if len(parts) > 1:
+        plain = join_plain_request_items(plain_missing_information(part) for part in parts)
+    else:
+        plain = plain_missing_information(text)
+    plain = plain.replace(
+        "OCT findings, whether cystoid macular oedema/fluid is present, how vision is affected and whether retina/HES are already monitoring and whether there is pain, redness, light sensitivity, discharge, reduced vision or inflammation after cataract surgery",
+        "the OCT findings, whether there is cystoid macular oedema/fluid, how vision is affected, whether retina clinic or HES are already monitoring, and whether there is any pain, redness, light sensitivity, discharge or inflammation after cataract surgery",
+    )
+    plain = plain.replace("retina/HES", "retina clinic or HES")
+    return plain
 
 
 def clinician_review_flags(result):
@@ -454,9 +581,9 @@ def ensure_draft_response(question, result):
     top = presentations[0] if presentations else {}
 
     if outcome.get("Outcome ID") == "OUT002":
-        info = ", ".join(item.get("Missing Information", "") for item in missing_info if item.get("Missing Information"))
+        info = join_plain_request_items(plain_missing_information_list(missing_info))
         if not info:
-            info = "clinical question, laterality, VA, symptom duration, relevant positive/negative symptoms, examination findings and images/OCT/photos where available"
+            info = "the clinical question, which eye is affected, vision/VA, symptom duration, symptoms present and absent, examination findings and any images/OCT/photos where available"
         result["Draft Response"] = {
             "Summary": "More information is needed before safe advice can be given.",
             "Suggested response": f"Thanks for this. I can advise more safely with a little more detail. Could you send {info}?",
@@ -544,6 +671,7 @@ def soften_draft_response_language(result):
     if response.startswith("Please provide:"):
         details = response.replace("Please provide:", "", 1).strip().rstrip(".")
         if details:
+            details = plainify_request_details(details)
             draft["Suggested response"] = (
                 "Thanks for this. I can advise more safely with a little more detail. "
                 f"Could you send {details}"
@@ -554,12 +682,33 @@ def soften_draft_response_language(result):
     elif response.startswith("Please provide "):
         details = response.replace("Please provide ", "", 1).strip().rstrip(".")
         if details:
+            details = plainify_request_details(details)
             draft["Suggested response"] = (
                 "Thanks for this. I can advise more safely with a little more detail. "
                 f"Could you send {details}"
             )
             if not draft["Suggested response"].endswith((".", "?")):
                 draft["Suggested response"] += "?"
+
+    response = str(draft.get("Suggested response", "") or "").strip()
+    if "Could you send " in response:
+        prefix, details = response.split("Could you send ", 1)
+        draft["Suggested response"] = f"{prefix}Could you send {plainify_request_details(details)}?"
+
+    draft["Suggested response"] = (
+        str(draft.get("Suggested response", "") or "")
+        .replace("symptom negation / red-flag status", "whether concerning symptoms are present or absent")
+        .replace("red-flag status", "whether any concerning symptoms are present")
+        .replace("red flags", "concerning symptoms")
+        .replace("positive and negative symptoms", "symptoms that are present and symptoms that are absent")
+        .replace("laterality", "which eye is affected")
+        .replace("Laterality", "which eye is affected")
+        .replace("Amsler status", "Amsler/distortion symptoms")
+        .replace("distortion/Amsler status", "distortion or Amsler symptoms")
+        .replace("VA impact", "how vision is affected")
+        .replace("pseudophakia status", "lens implant/pseudophakia details")
+        .replace("symptom onset/change", "when symptoms started and whether they are changing")
+    )
 
     if "use the relevant urgent pathway" in safety_net:
         draft["Safety net"] = safety_net.replace(
@@ -1171,7 +1320,7 @@ def render_missing_info(items):
 
 def render_confidence_badge(confidence):
     styles = {
-        "High": ("✓", "#e6f4ea", "#137333"),
+        "High": ("OK", "#e6f4ea", "#137333"),
         "Medium": ("!", "#fff4e5", "#a15c00"),
         "Low": ("!", "#fdecea", "#b3261e"),
     }
@@ -1224,14 +1373,14 @@ def render_clinician_feedback_form(question, result):
 
         suggestion_helpful = st.radio(
             "Was the suggested response helpful?",
-            ["👍 Helpful", "👎 Needs improvement"],
+            ["Helpful", "Needs improvement"],
             horizontal=True,
         )
         graph_learning_candidate = "No, this was fine"
         override_reason = ""
         reasoning_not_satisfactory = False
 
-        if suggestion_helpful == "👎 Needs improvement":
+        if suggestion_helpful == "Needs improvement":
             reasoning_not_satisfactory = True
             graph_learning_candidate = st.selectbox(
                 "What would improve it?",
