@@ -131,12 +131,6 @@ GRAPH_CANDIDATE_COLUMNS = [
     "Implementation notes",
 ]
 
-TOOL_USE_STATUS_OPTIONS = [
-    "Accepted",
-    "Edited",
-    "Overridden",
-]
-
 GRAPH_LEARNING_OPTIONS = [
     "No",
     "Auto-detect from final response",
@@ -448,6 +442,7 @@ def empty_feedback():
         "override_reason": "",
         "graph_learning_candidate": "",
         "learning_status": "",
+        "reasoning_not_satisfactory": False,
     }
 
 
@@ -457,6 +452,24 @@ def outcome_id_from_label(label):
 
 def normalise_text(value):
     return " ".join(str(value or "").lower().split())
+
+
+def infer_tool_use_status(result, feedback):
+    if feedback.get("reasoning_not_satisfactory"):
+        return "Rejected - reasoning concern"
+
+    outcome = result.get("Outcome Recommendation", {})
+    draft = result.get("Draft Response", {})
+    tool_outcome_id = outcome.get("Outcome ID", "")
+    clinician_outcome_id = outcome_id_from_label(feedback.get("clinician_final_outcome", ""))
+    tool_response = normalise_text(draft.get("Suggested response", ""))
+    clinician_response = normalise_text(feedback.get("clinician_final_response", ""))
+
+    if clinician_outcome_id and clinician_outcome_id != tool_outcome_id:
+        return "Overridden"
+    if clinician_response != tool_response:
+        return "Edited"
+    return "Accepted"
 
 
 def clinician_response_suggests_referral(text):
@@ -524,6 +537,9 @@ def infer_graph_learning_candidate(question, result, feedback):
     needs_review, review_reason, _status, category = clinician_review_flags(result)
     presentations = result.get("Presentation Ranking", [])
     features = result.get("Detected Features", [])
+
+    if feedback.get("reasoning_not_satisfactory"):
+        return "Yes - missed phrase", "Clinician marked the tool reasoning as not clinically satisfactory."
 
     if clinician_outcome_id and clinician_outcome_id != tool_outcome_id:
         if clinician_outcome_id == "OUT003" or clinician_response_suggests_referral(response):
@@ -1035,24 +1051,20 @@ def render_clinician_feedback_form(question, result):
             )
 
             with st.expander("Optional audit fields"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    tool_use_status = st.selectbox(
-                        "Tool use",
-                        TOOL_USE_STATUS_OPTIONS,
-                        index=0,
-                    )
-                with col2:
-                    graph_learning_candidate = st.selectbox(
-                        "Learning signal",
-                        GRAPH_LEARNING_OPTIONS,
-                        index=1,
-                    )
+                graph_learning_candidate = st.selectbox(
+                    "Learning signal",
+                    GRAPH_LEARNING_OPTIONS,
+                    index=1,
+                )
                 override_reason = st.text_area(
                     "Optional note",
                     value="",
                     height=90,
                     placeholder="Optional. Use this only if the tool was wrong or missed something important.",
+                )
+                reasoning_not_satisfactory = st.checkbox(
+                    "Tool reasoning was not clinically satisfactory",
+                    value=False,
                 )
 
             submitted = st.form_submit_button("Save feedback and learning signal", type="primary")
@@ -1063,11 +1075,13 @@ def render_clinician_feedback_form(question, result):
     feedback = {
         "clinician_final_outcome": clinician_final_outcome,
         "clinician_final_response": clinician_final_response.strip(),
-        "tool_use_status": tool_use_status,
+        "tool_use_status": "",
         "override_reason": override_reason.strip(),
         "graph_learning_candidate": graph_learning_candidate,
         "learning_status": "",
+        "reasoning_not_satisfactory": reasoning_not_satisfactory,
     }
+    feedback["tool_use_status"] = infer_tool_use_status(result, feedback)
     learning = graph_learning_payload(question, result, feedback)
     feedback["graph_learning_candidate"] = learning["learning_candidate"]
     feedback["learning_status"] = learning["learning_status"]
