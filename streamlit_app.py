@@ -152,7 +152,7 @@ OUTCOME_LABELS = {
 OUTCOME_DISPLAY_LABELS = {
     "OUT001": "Send advice back",
     "OUT002": "Ask the referrer for more information",
-    "OUT003": "Convert to referral",
+    "OUT003": "Clinician converts to referral",
 }
 
 LEARNING_SIGNAL_MAP = {
@@ -466,8 +466,8 @@ def ensure_draft_response(question, result):
         result["Draft Response"] = {
             "Summary": "The information provided suggests ophthalmology assessment is needed.",
             "Suggested response": (
-                "Thanks for this. From the details provided, this needs ophthalmology assessment. "
-                "Please refer using the appropriate local pathway and include symptom onset, VA, laterality, key positive and negative symptoms, relevant examination findings and any images/OCT/photos available."
+                "Thanks for this. From the details provided, we will convert this A&G request into an ophthalmology referral. "
+                "It would be helpful to include symptom onset, VA, laterality, key positive and negative symptoms, relevant examination findings and any images/OCT/photos available."
             ),
             "Safety net": "If symptoms are acute, severe, rapidly worsening, or associated with pain, red eye, neurological symptoms or sudden reduced vision, please refer urgently rather than via a routine pathway.",
         }
@@ -519,7 +519,7 @@ def soften_draft_response_language(result):
         and ("disc" in query or "glaucoma" in query or "field" in query)
     ):
         draft["Suggested response"] = (
-            "Thanks for this. The raised IOP and suspicious disc findings need glaucoma assessment, so please refer via the local glaucoma pathway. "
+            "Thanks for this. The raised IOP and suspicious disc findings need glaucoma assessment, so we will convert this A&G request into a glaucoma referral. "
             "It would be helpful to include IOP values and method, disc/OCT RNFL images, visual-field printouts/reliability, previous comparison and whether the patient is already under HES/glaucoma follow-up."
         )
         draft["Safety net"] = (
@@ -537,8 +537,8 @@ def soften_draft_response_language(result):
 
     if response.startswith("Convert or escalate"):
         draft["Suggested response"] = (
-            "Thanks for this. From the details provided, this should be referred for ophthalmology assessment using the appropriate local pathway. "
-            "Please include the symptom history, VA, laterality, relevant positive and negative findings, and any images/OCT/photos available."
+            "Thanks for this. From the details provided, we will convert this A&G request into an ophthalmology referral. "
+            "It would be helpful to include the symptom history, VA, laterality, relevant positive and negative findings, and any images/OCT/photos available."
         )
 
     if response.startswith("Please provide:"):
