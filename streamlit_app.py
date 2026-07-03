@@ -132,19 +132,35 @@ GRAPH_CANDIDATE_COLUMNS = [
 ]
 
 GRAPH_LEARNING_OPTIONS = [
-    "No",
-    "Auto-detect from final response",
-    "Yes - missed phrase",
-    "Yes - wrong outcome",
-    "Yes - missing information rule",
-    "Yes - new topic",
-    "Yes - safety issue",
+    "Work this out from my response",
+    "No further improvement needed",
+    "The tool missed wording in the request",
+    "The tool suggested the wrong next step",
+    "The tool should have asked for different information",
+    "This is a new topic or pathway",
+    "There may be a safety concern",
 ]
 
 OUTCOME_LABELS = {
     "OUT001": "Return to referrer with advice",
     "OUT002": "Return to referrer for more information",
     "OUT003": "Clinician to convert to referral",
+}
+
+OUTCOME_DISPLAY_LABELS = {
+    "OUT001": "Give advice to the referrer",
+    "OUT002": "Ask the referrer for more information",
+    "OUT003": "Convert to referral",
+}
+
+LEARNING_SIGNAL_MAP = {
+    "Work this out from my response": "Auto-detect from final response",
+    "No further improvement needed": "No",
+    "The tool missed wording in the request": "Yes - missed phrase",
+    "The tool suggested the wrong next step": "Yes - wrong outcome",
+    "The tool should have asked for different information": "Yes - missing information rule",
+    "This is a new topic or pathway": "Yes - new topic",
+    "There may be a safety concern": "Yes - safety issue",
 }
 
 
@@ -447,7 +463,27 @@ def empty_feedback():
 
 
 def outcome_id_from_label(label):
-    return str(label or "").split(":", 1)[0].strip()
+    label = str(label or "").strip()
+    if label.startswith("OUT"):
+        return label.split(":", 1)[0].strip()
+    for outcome_id, display_label in OUTCOME_DISPLAY_LABELS.items():
+        if label == display_label:
+            return outcome_id
+    for outcome_id, full_label in OUTCOME_LABELS.items():
+        if label == full_label:
+            return outcome_id
+    return label
+
+
+def outcome_log_label(display_label):
+    outcome_id = outcome_id_from_label(display_label)
+    if outcome_id in OUTCOME_LABELS:
+        return f"{outcome_id}: {OUTCOME_LABELS[outcome_id]}"
+    return str(display_label or "")
+
+
+def internal_learning_signal(label):
+    return LEARNING_SIGNAL_MAP.get(str(label or "").strip(), str(label or "").strip())
 
 
 def normalise_text(value):
@@ -525,7 +561,7 @@ def clinician_response_requests_information(text):
 
 
 def infer_graph_learning_candidate(question, result, feedback):
-    requested = feedback.get("graph_learning_candidate", "")
+    requested = internal_learning_signal(feedback.get("graph_learning_candidate", ""))
     if requested and requested != "Auto-detect from final response":
         return requested, feedback.get("override_reason", "")
 
@@ -1019,29 +1055,28 @@ def render_clinician_feedback_form(question, result):
     needs_review, review_reason, _status, _category = clinician_review_flags(result)
     tool_outcome_id = outcome.get("Outcome ID", "")
     outcome_options = [
-        f"{outcome_id}: {label}"
-        for outcome_id, label in OUTCOME_LABELS.items()
+        OUTCOME_DISPLAY_LABELS[outcome_id]
+        for outcome_id in ("OUT001", "OUT002", "OUT003")
     ]
     default_outcome = next(
-        (idx for idx, option in enumerate(outcome_options) if option.startswith(tool_outcome_id)),
+        (idx for idx, option in enumerate(outcome_options) if option == OUTCOME_DISPLAY_LABELS.get(tool_outcome_id, "")),
         0,
     )
 
-    st.subheader("Quick clinician sign-off")
+    st.subheader("Clinician response")
     st.info(
-        "Time-saving mode: choose the final outcome and type/paste the advice you would send. "
-        "Graph-learning fields are auto-filled in the log."
+        "Choose what should happen next and edit the response if needed. The audit log will capture what changed automatically."
     )
     with st.container(border=True):
         with st.form("clinician_feedback_form"):
             clinician_final_outcome = st.radio(
-                "Final outcome",
+                "What should happen next?",
                 outcome_options,
                 index=default_outcome,
                 horizontal=True,
             )
             clinician_final_response = st.text_area(
-                "Final advice to send",
+                "Response to send",
                 value=draft.get("Suggested response", ""),
                 height=140,
                 placeholder=(
@@ -1050,34 +1085,34 @@ def render_clinician_feedback_form(question, result):
                 ),
             )
 
-            with st.expander("Optional audit fields"):
+            with st.expander("Optional improvement note"):
                 graph_learning_candidate = st.selectbox(
-                    "Learning signal",
+                    "How should this case be used to improve the tool?",
                     GRAPH_LEARNING_OPTIONS,
-                    index=1,
+                    index=0,
                 )
                 override_reason = st.text_area(
-                    "Optional note",
+                    "Comment",
                     value="",
                     height=90,
-                    placeholder="Optional. Use this only if the tool was wrong or missed something important.",
+                    placeholder="Optional. For example: missed lid lesion wording, should have suggested referral, or should ask for a photo.",
                 )
                 reasoning_not_satisfactory = st.checkbox(
-                    "Tool reasoning was not clinically satisfactory",
+                    "The suggested reasoning was not clinically satisfactory",
                     value=False,
                 )
 
-            submitted = st.form_submit_button("Save feedback and learning signal", type="primary")
+            submitted = st.form_submit_button("Save response", type="primary")
 
     if not submitted:
         return
 
     feedback = {
-        "clinician_final_outcome": clinician_final_outcome,
+        "clinician_final_outcome": outcome_log_label(clinician_final_outcome),
         "clinician_final_response": clinician_final_response.strip(),
         "tool_use_status": "",
         "override_reason": override_reason.strip(),
-        "graph_learning_candidate": graph_learning_candidate,
+        "graph_learning_candidate": internal_learning_signal(graph_learning_candidate),
         "learning_status": "",
         "reasoning_not_satisfactory": reasoning_not_satisfactory,
     }
@@ -1093,11 +1128,10 @@ def render_clinician_feedback_form(question, result):
         return
 
     if log_status == "logged":
-        st.success("Clinician feedback logged to Google Sheet.")
+        st.success("Response saved.")
         if learning["learning_candidate"].startswith("Yes"):
             st.info(
-                "Graph learning candidate auto-populated: "
-                f"{learning['learning_candidate']} - {learning['proposed_change_type']}."
+                "This case has been added to the improvement review list."
             )
     elif log_status == "not_configured":
         st.info("Google Sheet logging is not configured yet.")
