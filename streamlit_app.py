@@ -424,6 +424,8 @@ def plainify_request_details(details):
 def clinician_review_flags(result):
     if result.get("Review Override") == "glaucoma_adherence_advice":
         return "No", "Glaucoma adherence support advice", "Not required", "Existing pathway"
+    if result.get("Review Override") == "suspected_preseptal_cellulitis_more_info":
+        return "Optional", "Suspected eyelid cellulitis query needs basic history and examination findings", "Awaiting referrer information", "Existing pathway"
 
     outcome = result.get("Outcome Recommendation", {})
     rationale = outcome.get("Rationale", "")
@@ -631,6 +633,24 @@ def soften_draft_response_language(result):
     query = normalise_text(result.get("Query", ""))
     presentations = result.get("Presentation Ranking", [])
     top_presentation_id = presentations[0].get("Presentation ID", "") if presentations else ""
+
+    if (
+        ("preseptal" in query or "pre septal" in query or "pre ceptal" in query or "cellulitis" in query)
+        and ("lid" in query or "eyelid" in query or "swollen" in query or "swelling" in query)
+    ):
+        draft["Suggested response"] = (
+            "Thanks for this. Could you send any relevant previous eye or medical history and the basic examination findings: "
+            "how long the eyelid has been swollen, whether the child has a fever or seems unwell, vision if possible, "
+            "eye movements, whether eye movement is painful, whether the eye is pushed forward, pupil findings, red eye, "
+            "and a photo if available?"
+        )
+        draft["Safety net"] = (
+            "If the child is systemically unwell, has reduced vision, painful or restricted eye movements, the eye is pushed forward, "
+            "or there is severe headache, vomiting or concern about orbital cellulitis, please use the urgent same-day local pathway."
+        )
+        result["Review Override"] = "suspected_preseptal_cellulitis_more_info"
+        result["Draft Response"] = draft
+        return result
 
     if (
         top_presentation_id == "PR051"
@@ -1562,3 +1582,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
