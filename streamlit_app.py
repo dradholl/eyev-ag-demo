@@ -1121,6 +1121,24 @@ def render_missing_info(items):
             st.markdown(f"**{item['Missing Information ID']}**  {item['Missing Information']}")
 
 
+def render_confidence_badge(confidence):
+    styles = {
+        "High": ("✓", "#e6f4ea", "#137333"),
+        "Medium": ("!", "#fff4e5", "#a15c00"),
+        "Low": ("!", "#fdecea", "#b3261e"),
+    }
+    icon, background, colour = styles.get(confidence, ("?", "#eef2f7", "#405261"))
+    st.markdown(
+        f"""
+        <div style="display: inline-flex; align-items: center; gap: 0.55rem; padding: 0.45rem 0.7rem; border-radius: 999px; background: {background}; color: {colour}; font-weight: 700; margin: 0.25rem 0 0.75rem 0;">
+          <span style="display: inline-flex; align-items: center; justify-content: center; width: 1.35rem; height: 1.35rem; border-radius: 999px; border: 2px solid {colour}; font-size: 0.95rem; line-height: 1;">{icon}</span>
+          <span>{confidence} confidence</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_clinician_feedback_form(question, result):
     outcome = result.get("Outcome Recommendation", {})
     draft = result.get("Draft Response", {})
@@ -1134,12 +1152,11 @@ def render_clinician_feedback_form(question, result):
         (idx for idx, option in enumerate(outcome_options) if option == OUTCOME_DISPLAY_LABELS.get(tool_outcome_id, "")),
         0,
     )
-    confidence, confidence_reason = suggested_response_confidence(result)
+    confidence, _confidence_reason = suggested_response_confidence(result)
 
     st.subheader("Clinician response")
     st.caption("Check the suggested wording, amend it if needed, then save the response.")
-    st.markdown(f"**Confidence in suggested response:** {confidence}")
-    st.caption(confidence_reason)
+    render_confidence_badge(confidence)
     with st.container(border=True):
         clinician_final_outcome = st.radio(
             "What should happen next?",
