@@ -1554,7 +1554,7 @@ class OKGEngine:
         if not top_presentation and not detected_features and query.strip():
             missing_info = [{
                 "Missing Information ID": "MI000",
-                "Missing Information": "Recognisable clinical problem, key symptoms, laterality, VA and relevant examination findings",
+                "Missing Information": "Main eye problem or question, which eye is affected, vision/VA, symptom duration, key symptoms, relevant examination findings and any photo/OCT/image if available",
             }]
             outcome = self._outcome(
                 "OUT002",

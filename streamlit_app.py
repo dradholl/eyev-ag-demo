@@ -322,18 +322,17 @@ def enforce_safe_review_outcome(result):
     if needs_review == "Yes" and not result.get("Missing Information"):
         result["Missing Information"] = [{
             "Missing Information ID": "MI000",
-            "Missing Information": "Clinical problem, laterality, VA, symptom duration, relevant positive/negative symptoms, examination findings and images/photos/OCT where available",
+            "Missing Information": "Main eye problem or question, which eye is affected, vision/VA, symptom duration, key symptoms, relevant examination findings and any photo/OCT/image if available",
         }]
 
-    if needs_review == "Yes" and not result.get("Draft Response"):
+    if needs_review == "Yes":
         result["Draft Response"] = {
             "Summary": "This topic needs clinician review before safe final advice can be given.",
             "Suggested response": (
-                "Thanks for this. I would like to review this before giving final advice. "
-                "Could you send the clinical question, laterality, VA, symptom duration, key positive and negative symptoms, "
-                "relevant examination findings and images/photos/OCT where available?"
+                "Thanks for this. This is not a topic the current A&G tool can advise on confidently yet, so I would like this to be reviewed by a clinician before final advice is sent. "
+                "To help with that review, could you send the main eye problem or question, which eye is affected, vision/VA, how long it has been present, key symptoms, relevant examination findings and any photo/OCT/image if available?"
             ),
-            "Safety net": "If there is pain, reduced vision, red eye, rapidly worsening symptoms, neurological symptoms or other red flags, please refer urgently using the local ophthalmology pathway.",
+            "Safety net": "If there is pain, reduced vision, red eye, rapidly worsening symptoms, neurological symptoms or any other red flag, please refer urgently using the local ophthalmology pathway rather than waiting for advice.",
         }
 
     return result
