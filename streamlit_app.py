@@ -1123,47 +1123,46 @@ def render_clinician_feedback_form(question, result):
     st.subheader("Clinician response")
     st.caption("Check the suggested wording, amend it if needed, then save the response.")
     with st.container(border=True):
-        with st.form("clinician_feedback_form"):
-            clinician_final_outcome = st.radio(
-                "What should happen next?",
-                outcome_options,
-                index=default_outcome,
-                horizontal=True,
+        clinician_final_outcome = st.radio(
+            "What should happen next?",
+            outcome_options,
+            index=default_outcome,
+            horizontal=True,
+        )
+        clinician_final_response = st.text_area(
+            "Response to send",
+            value=draft.get("Suggested response", ""),
+            height=140,
+            placeholder=(
+                "A few words is enough, e.g. 'Refer to oculoplastics' or "
+                "'Ask for lid photo, duration, change, bleeding/lash loss'."
+            ),
+        )
+
+        suggestion_helpful = st.radio(
+            "Was the suggested response helpful?",
+            ["👍 Helpful", "👎 Needs improvement"],
+            horizontal=True,
+        )
+        graph_learning_candidate = "No, this was fine"
+        override_reason = ""
+        reasoning_not_satisfactory = False
+
+        if suggestion_helpful == "👎 Needs improvement":
+            reasoning_not_satisfactory = True
+            graph_learning_candidate = st.selectbox(
+                "What would improve it?",
+                GRAPH_LEARNING_OPTIONS,
+                index=0,
             )
-            clinician_final_response = st.text_area(
-                "Response to send",
-                value=draft.get("Suggested response", ""),
-                height=140,
-                placeholder=(
-                    "A few words is enough, e.g. 'Refer to oculoplastics' or "
-                    "'Ask for lid photo, duration, change, bleeding/lash loss'."
-                ),
+            override_reason = st.text_area(
+                "What was missing or unhelpful?",
+                value="",
+                height=120,
+                placeholder="A few words is enough. For example: missed lid lump wording, should have suggested referral, or should ask for a photo.",
             )
 
-            suggestion_helpful = st.radio(
-                "Was the suggested response helpful?",
-                ["👍 Helpful", "👎 Needs improvement"],
-                horizontal=True,
-            )
-            graph_learning_candidate = "No, this was fine"
-            override_reason = ""
-            reasoning_not_satisfactory = False
-
-            if suggestion_helpful == "👎 Needs improvement":
-                reasoning_not_satisfactory = True
-                graph_learning_candidate = st.selectbox(
-                    "What would improve it?",
-                    GRAPH_LEARNING_OPTIONS,
-                    index=0,
-                )
-                override_reason = st.text_area(
-                    "Why was it not helpful?",
-                    value="",
-                    height=90,
-                    placeholder="A few words is enough. For example: missed lid lump wording, should have suggested referral, or should ask for a photo.",
-                )
-
-            submitted = st.form_submit_button("Save clinician response", type="primary")
+        submitted = st.button("Save clinician response", type="primary")
 
     if not submitted:
         return
