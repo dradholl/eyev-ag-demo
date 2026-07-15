@@ -1,8 +1,13 @@
 """Streamlit demo app for the EyeV A&G reasoning engine."""
 
+import base64
 from datetime import datetime
 import json
+import mimetypes
+import os
 from pathlib import Path
+import re
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 import streamlit as st
@@ -12,6 +17,92 @@ from EyeV_OKG_V7_engine import OKGEngine
 
 APP_DIR = Path(__file__).resolve().parent
 GRAPH_FILE = APP_DIR / "EyeV_Ophthalmic_Knowledge_Graph_v2.xlsx"
+OPENAI_RESPONSES_API_URL = "https://api.openai.com/v1/responses"
+IMAGE_REVIEW_MODEL = os.environ.get("OPENAI_MODEL", "gpt-5.6")
+IMAGE_REVIEW_PROMPT_VERSION = "ag-image-validation-v1"
+IMAGE_REVIEW_MAX_BYTES = 20 * 1024 * 1024
+ALLOWED_IMAGE_REVIEW_TYPES = {
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+    "application/pdf",
+}
+
+IMAGE_REVIEW_LABELS = {
+    "image_accessible": ["Yes", "No", "Unclear"],
+    "image_type": [
+        "OCT macula",
+        "OCT RNFL/disc",
+        "Fundus photo",
+        "Visual field",
+        "External eye / lids",
+        "Anterior segment photo",
+        "Report / text document",
+        "Other",
+        "Unclear",
+    ],
+    "image_quality": ["Good", "Adequate", "Poor", "Unclear"],
+    "finding_visible": ["Yes", "Partly", "No", "Unclear"],
+    "finding_category": [
+        "Macula/OCT",
+        "Optic disc/RNFL",
+        "Glaucoma/fields",
+        "External eye/lids",
+        "Anterior segment",
+        "Retina lesion",
+        "Normal/no obvious abnormality",
+        "Other",
+        "Unclear",
+    ],
+    "supports_request": ["Yes", "Partly", "No", "Unclear"],
+    "confidence": ["High", "Medium", "Low"],
+}
+
+IMAGE_REVIEW_SYSTEM_PROMPT = """You are supporting an ophthalmology advice-and-guidance image workflow.
+
+You are not making an autonomous diagnosis or management decision. Your role is to describe what is visible in the attached image/file and judge whether the image appears relevant to the clinical question asked by the referrer.
+
+Use only the allowed labels. Be cautious where image quality, file access, or clinical context is limited. If the attachment is not visible to you, say image_accessible = No or Unclear and keep other labels conservative.
+
+The support label means whether the image is relevant to, and helps assess, the A&G request. It does not mean the historical clinician response was correct and it must not be treated as an automated final decision.
+
+Return JSON only."""
+
+IMAGE_REVIEW_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "image_accessible": {"type": "string", "enum": IMAGE_REVIEW_LABELS["image_accessible"]},
+        "image_type": {"type": "string", "enum": IMAGE_REVIEW_LABELS["image_type"]},
+        "image_quality": {"type": "string", "enum": IMAGE_REVIEW_LABELS["image_quality"]},
+        "finding_visible": {"type": "string", "enum": IMAGE_REVIEW_LABELS["finding_visible"]},
+        "finding_category": {"type": "string", "enum": IMAGE_REVIEW_LABELS["finding_category"]},
+        "brief_image_finding": {
+            "type": "string",
+            "description": "Short plain-English description of visible finding or limitation.",
+            "maxLength": 500,
+        },
+        "supports_ag_request": {"type": "string", "enum": IMAGE_REVIEW_LABELS["supports_request"]},
+        "confidence": {"type": "string", "enum": IMAGE_REVIEW_LABELS["confidence"]},
+        "limitations": {
+            "type": "string",
+            "description": "Short note on visibility, uncertainty, or access limitations.",
+            "maxLength": 500,
+        },
+    },
+    "required": [
+        "image_accessible",
+        "image_type",
+        "image_quality",
+        "finding_visible",
+        "finding_category",
+        "brief_image_finding",
+        "supports_ag_request",
+        "confidence",
+        "limitations",
+    ],
+}
 
 
 EXAMPLES = [
@@ -141,6 +232,36 @@ GRAPH_CANDIDATE_COLUMNS = [
     "Approved by",
     "Implementation notes",
 ]
+
+IMAGE_REVIEW_COLUMNS = [
+    "Image attached",
+    "Image filename",
+    "Image content type",
+    "Image size bytes",
+    "GPT image model",
+    "GPT image prompt version",
+    "GPT image accessible",
+    "GPT image type",
+    "GPT image quality",
+    "GPT finding visible",
+    "GPT finding category",
+    "GPT brief image finding",
+    "GPT image relevance to A&G request",
+    "GPT image confidence",
+    "GPT image uncertainty flag",
+    "GPT image limitations",
+    "GPT image error",
+    "Clinician image summary assessment",
+    "Clinician image notes",
+]
+
+for column in IMAGE_REVIEW_COLUMNS:
+    if column not in SHEET_COLUMNS:
+        SHEET_COLUMNS.append(column)
+    if column not in FEEDBACK_COLUMNS:
+        FEEDBACK_COLUMNS.append(column)
+    if column not in REVIEW_QUEUE_COLUMNS:
+        REVIEW_QUEUE_COLUMNS.append(column)
 
 GRAPH_LEARNING_OPTIONS = [
     "Decide from my final response",
@@ -293,6 +414,210 @@ def load_engine():
     return OKGEngine(str(GRAPH_FILE))
 
 
+def openai_api_key():
+    return st.secrets.get("OPENAI_API_KEY", "") or os.environ.get("OPENAI_API_KEY", "")
+
+
+def image_review_enabled():
+    return bool(openai_api_key())
+
+
+def content_type_for_upload(uploaded_file):
+    if uploaded_file is None:
+        return ""
+    content_type = getattr(uploaded_file, "type", "") or ""
+    if content_type:
+        return content_type
+    guessed, _encoding = mimetypes.guess_type(uploaded_file.name)
+    return guessed or "application/octet-stream"
+
+
+def image_review_error(filename, content_type, size_bytes, message):
+    return {
+        "attached": "Yes",
+        "filename": filename or "",
+        "content_type": content_type or "",
+        "size_bytes": size_bytes or "",
+        "model": IMAGE_REVIEW_MODEL,
+        "prompt_version": IMAGE_REVIEW_PROMPT_VERSION,
+        "image_accessible": "Unclear",
+        "image_type": "Unclear",
+        "image_quality": "Unclear",
+        "finding_visible": "Unclear",
+        "finding_category": "Unclear",
+        "brief_image_finding": "",
+        "supports_ag_request": "Unclear",
+        "confidence": "Low",
+        "limitations": message,
+        "uncertainty_flag": "Yes - image review unavailable or uncertain",
+        "error": message,
+    }
+
+
+def no_image_review():
+    return {
+        "attached": "No",
+        "filename": "",
+        "content_type": "",
+        "size_bytes": "",
+        "model": "",
+        "prompt_version": "",
+        "image_accessible": "",
+        "image_type": "",
+        "image_quality": "",
+        "finding_visible": "",
+        "finding_category": "",
+        "brief_image_finding": "",
+        "supports_ag_request": "",
+        "confidence": "",
+        "limitations": "",
+        "uncertainty_flag": "",
+        "error": "",
+    }
+
+
+def build_image_review_attachment(uploaded_file, data, content_type):
+    encoded = base64.b64encode(data).decode("ascii")
+    data_url = f"data:{content_type};base64,{encoded}"
+    if content_type == "application/pdf":
+        return {
+            "type": "input_file",
+            "filename": uploaded_file.name,
+            "file_data": data_url,
+        }
+    return {"type": "input_image", "image_url": data_url, "detail": "high"}
+
+
+def build_image_review_payload(question, uploaded_file, data, content_type):
+    attachment = build_image_review_attachment(uploaded_file, data, content_type)
+    user_text = (
+        "A&G request / initial message:\n"
+        f"{question}\n\n"
+        "Please review the attached image/file and complete the structured image review labels."
+    )
+    return {
+        "model": IMAGE_REVIEW_MODEL,
+        "store": False,
+        "input": [
+            {
+                "role": "developer",
+                "content": [{"type": "input_text", "text": IMAGE_REVIEW_SYSTEM_PROMPT}],
+            },
+            {
+                "role": "user",
+                "content": [{"type": "input_text", "text": user_text}, attachment],
+            },
+        ],
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "ag_image_review",
+                "strict": True,
+                "schema": IMAGE_REVIEW_SCHEMA,
+            }
+        },
+    }
+
+
+def extract_response_text(response):
+    if isinstance(response.get("output_text"), str):
+        return response["output_text"]
+    parts = []
+    for item in response.get("output", []):
+        for content in item.get("content", []):
+            text = content.get("text")
+            if isinstance(text, str):
+                parts.append(text)
+    if parts:
+        return "\n".join(parts)
+    raise RuntimeError("Could not find text output in image review response")
+
+
+def call_openai_image_review(payload):
+    request = Request(
+        OPENAI_RESPONSES_API_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {openai_api_key()}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=90) as response:
+            api_response = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        body = re.sub(r"sk-[A-Za-z0-9_\\-]+", "sk-REDACTED", body)
+        raise RuntimeError(f"OpenAI API HTTP {exc.code}: {body}") from exc
+    except URLError as exc:
+        raise RuntimeError(f"OpenAI API network error: {exc}") from exc
+
+    return json.loads(extract_response_text(api_response))
+
+
+def image_uncertainty_flag(review):
+    flags = []
+    if review.get("confidence") in {"Low", "Medium"}:
+        flags.append(f"{review.get('confidence')} confidence")
+    if review.get("supports_ag_request") in {"Partly", "Unclear", "No"}:
+        flags.append(f"relevance {review.get('supports_ag_request')}")
+    if review.get("image_accessible") != "Yes":
+        flags.append(f"image accessible {review.get('image_accessible')}")
+    if review.get("image_quality") in {"Poor", "Unclear"}:
+        flags.append(f"quality {review.get('image_quality')}")
+    if review.get("finding_visible") in {"Partly", "No", "Unclear"}:
+        flags.append(f"finding visible {review.get('finding_visible')}")
+    return "Yes - " + "; ".join(flags) if flags else "No"
+
+
+def analyse_uploaded_image(question, uploaded_file):
+    if uploaded_file is None:
+        return no_image_review()
+
+    content_type = content_type_for_upload(uploaded_file)
+    data = uploaded_file.getvalue()
+    if content_type not in ALLOWED_IMAGE_REVIEW_TYPES:
+        return image_review_error(
+            uploaded_file.name,
+            content_type,
+            len(data),
+            "Unsupported attachment type. Please use an image or PDF; video is excluded from this validation scope.",
+        )
+    if len(data) > IMAGE_REVIEW_MAX_BYTES:
+        return image_review_error(
+            uploaded_file.name,
+            content_type,
+            len(data),
+            "Attachment is larger than the configured image-review limit.",
+        )
+    if not openai_api_key():
+        return image_review_error(
+            uploaded_file.name,
+            content_type,
+            len(data),
+            "OPENAI_API_KEY is not configured, so image review was not run.",
+        )
+
+    payload = build_image_review_payload(question, uploaded_file, data, content_type)
+    try:
+        review = call_openai_image_review(payload)
+    except Exception as exc:
+        return image_review_error(uploaded_file.name, content_type, len(data), str(exc))
+
+    review.update({
+        "attached": "Yes",
+        "filename": uploaded_file.name,
+        "content_type": content_type,
+        "size_bytes": len(data),
+        "model": IMAGE_REVIEW_MODEL,
+        "prompt_version": IMAGE_REVIEW_PROMPT_VERSION,
+        "uncertainty_flag": image_uncertainty_flag(review),
+        "error": "",
+    })
+    return review
+
+
 def logging_mode():
     if st.secrets.get("GOOGLE_APPS_SCRIPT_URL", ""):
         return "apps_script"
@@ -360,6 +685,36 @@ def append_with_apps_script(sheets):
 
 def join_values(items, key):
     return "; ".join(str(item.get(key, "")) for item in items if item.get(key, ""))
+
+
+def image_review_from_result(result):
+    return result.get("Image Review", {}) or no_image_review()
+
+
+def image_review_log_values(result, feedback=None):
+    feedback = feedback or {}
+    review = image_review_from_result(result)
+    return [
+        review.get("attached", ""),
+        review.get("filename", ""),
+        review.get("content_type", ""),
+        review.get("size_bytes", ""),
+        review.get("model", ""),
+        review.get("prompt_version", ""),
+        review.get("image_accessible", ""),
+        review.get("image_type", ""),
+        review.get("image_quality", ""),
+        review.get("finding_visible", ""),
+        review.get("finding_category", ""),
+        review.get("brief_image_finding", ""),
+        review.get("supports_ag_request", ""),
+        review.get("confidence", ""),
+        review.get("uncertainty_flag", ""),
+        review.get("limitations", ""),
+        review.get("error", ""),
+        feedback.get("clinician_image_assessment", ""),
+        feedback.get("clinician_image_notes", ""),
+    ]
 
 
 def plain_missing_information(text):
@@ -769,6 +1124,8 @@ def empty_feedback():
         "clinician_final_outcome": "",
         "clinician_final_response": "",
         "suggestion_helpful": "",
+        "clinician_image_assessment": "",
+        "clinician_image_notes": "",
         "tool_use_status": "",
         "override_reason": "",
         "graph_learning_candidate": "",
@@ -1019,7 +1376,7 @@ def result_to_sheet_row(question, result, feedback=None):
     needs_review, review_reason, review_status, reviewer_category = clinician_review_flags(result)
     confidence, confidence_reason = suggested_response_confidence(result)
 
-    return [
+    row = [
         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         question,
         needs_review,
@@ -1064,6 +1421,7 @@ def result_to_sheet_row(question, result, feedback=None):
         outcome.get("Outcome", ""),
         draft.get("Suggested response", ""),
     ]
+    return row + image_review_log_values(result, feedback)
 
 
 def result_to_review_queue_row(question, result, feedback=None):
@@ -1076,7 +1434,7 @@ def result_to_review_queue_row(question, result, feedback=None):
     needs_review, review_reason, review_status, reviewer_category = clinician_review_flags(result)
     confidence, confidence_reason = suggested_response_confidence(result)
 
-    return [
+    row = [
         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         question,
         needs_review,
@@ -1100,6 +1458,7 @@ def result_to_review_queue_row(question, result, feedback=None):
         feedback.get("override_reason", ""),
         learning["proposed_change_type"] or "",
     ]
+    return row + image_review_log_values(result, feedback)
 
 
 def result_to_graph_candidate_row(question, result, feedback=None):
@@ -1137,7 +1496,7 @@ def result_to_feedback_row(question, result, feedback):
     draft = result.get("Draft Response", {})
     confidence, confidence_reason = suggested_response_confidence(result)
 
-    return [
+    row = [
         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         question,
         outcome.get("Outcome ID", ""),
@@ -1162,6 +1521,7 @@ def result_to_feedback_row(question, result, feedback):
         join_values(result.get("Safety Ranking", []), "Safety Condition"),
         join_values(result.get("Missing Information", []), "Missing Information"),
     ]
+    return row + image_review_log_values(result, feedback)
 
 
 def build_logging_payloads(question, result, feedback=None):
@@ -1364,6 +1724,65 @@ def render_draft_response(draft):
         st.write(draft.get("Safety net", ""))
 
 
+def render_image_review(review):
+    if not review or review.get("attached") != "Yes":
+        return
+
+    st.subheader("Image summary")
+    if review.get("error"):
+        st.warning(f"Image review was not completed: {review.get('limitations') or review.get('error')}")
+        return
+
+    flag = review.get("uncertainty_flag", "")
+    if flag and flag != "No":
+        st.warning(f"Image output needs clinician attention: {flag}")
+    else:
+        st.success("Image output did not trigger an uncertainty flag.")
+
+    with st.container(border=True):
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Image type", review.get("image_type", ""))
+        col2.metric("Confidence", review.get("confidence", ""))
+        col3.metric("Relevant to A&G", review.get("supports_ag_request", ""))
+
+        st.markdown("**Visible finding**")
+        st.write(review.get("brief_image_finding", ""))
+
+        detail_cols = st.columns(3)
+        detail_cols[0].write(f"**Quality:** {review.get('image_quality', '')}")
+        detail_cols[1].write(f"**Finding visible:** {review.get('finding_visible', '')}")
+        detail_cols[2].write(f"**Finding category:** {review.get('finding_category', '')}")
+
+        limitations = review.get("limitations", "")
+        if limitations:
+            st.caption(f"Limitations: {limitations}")
+        st.caption(
+            "This is clinician-support information only. The clinician remains responsible for final image interpretation and the A&G response."
+        )
+
+
+def render_analysis_result(result):
+    render_clinician_review_notice(result)
+    outcome = result.get("Outcome Recommendation", {})
+    draft = result.get("Draft Response", {})
+
+    st.subheader("Suggested outcome")
+    render_outcome(outcome)
+
+    render_image_review(image_review_from_result(result))
+
+    st.subheader("Draft response")
+    render_draft_response(draft)
+
+    with st.expander("Detected features and safety checks"):
+        st.markdown("**Detected features**")
+        render_features(result.get("Detected Features", []))
+        st.markdown("**Safety checks**")
+        render_safety(result.get("Safety Ranking", []))
+        st.markdown("**Missing information**")
+        render_missing_info(result.get("Missing Information", []))
+
+
 def render_features(features):
     if not features:
         st.info("No clinical features detected.")
@@ -1477,6 +1896,26 @@ def render_clinician_feedback_form(question, result):
             ["👍 Helpful", "👎 Needs improvement"],
             horizontal=True,
         )
+        clinician_image_assessment = ""
+        clinician_image_notes = ""
+        if image_review_from_result(result).get("attached") == "Yes":
+            st.markdown("**Image summary review**")
+            clinician_image_assessment = st.radio(
+                "How did you use the GPT image summary?",
+                [
+                    "Accepted",
+                    "Used with edits / caution",
+                    "Not used",
+                    "Image summary unavailable",
+                ],
+                horizontal=True,
+            )
+            clinician_image_notes = st.text_area(
+                "Image summary notes",
+                value="",
+                height=80,
+                placeholder="Optional: note what was corrected, ignored, or clinically important.",
+            )
         graph_learning_candidate = "No, this was fine"
         override_reason = ""
         reasoning_not_satisfactory = False
@@ -1504,6 +1943,8 @@ def render_clinician_feedback_form(question, result):
         "clinician_final_outcome": outcome_log_label(clinician_final_outcome),
         "clinician_final_response": clinician_final_response.strip(),
         "suggestion_helpful": "No - needs improvement" if suggestion_helpful in ("👎 Needs improvement", "Needs improvement") else "Yes - helpful",
+        "clinician_image_assessment": clinician_image_assessment,
+        "clinician_image_notes": clinician_image_notes.strip(),
         "tool_use_status": "",
         "override_reason": override_reason.strip(),
         "graph_learning_candidate": internal_learning_signal(graph_learning_candidate),
@@ -1560,6 +2001,13 @@ def main():
 
     default_text = selected_example or EXAMPLES[0]
     question = st.text_area("A&G request text", value=default_text, height=180)
+    uploaded_image = st.file_uploader(
+        "Optional image/PDF attachment",
+        type=["png", "jpg", "jpeg", "webp", "gif", "pdf"],
+        help="Attach an ocular image or PDF if available. Video is outside the current validated image/PDF scope.",
+    )
+    if uploaded_image is not None and not image_review_enabled():
+        st.info("Image upload is available, but GPT image review needs OPENAI_API_KEY in Streamlit secrets or the environment.")
 
     analyse = st.button("Create suggested response", type="primary")
 
@@ -1571,12 +2019,18 @@ def main():
 
         result = engine.analyse(cleaned)
         result = prepare_result_for_display(cleaned, result)
+        if uploaded_image is not None:
+            with st.spinner("Reviewing attached image/PDF..."):
+                result["Image Review"] = analyse_uploaded_image(cleaned, uploaded_image)
+        else:
+            result["Image Review"] = no_image_review()
         st.session_state["last_question"] = cleaned
         st.session_state["last_result"] = result
 
     if st.session_state.get("last_result"):
         cleaned = st.session_state["last_question"]
         result = st.session_state["last_result"]
+        render_analysis_result(result)
         render_clinician_feedback_form(cleaned, result)
 
 
