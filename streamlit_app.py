@@ -724,6 +724,137 @@ def image_review_suggests_macular_fluid(review):
     return macula_context and any(term in text for term in fluid_terms)
 
 
+def question_suggests_new_reduced_vision(question):
+    text = normalise_text(question)
+    reduced_vision_terms = (
+        "reduced vision",
+        "reduced va",
+        "drop in vision",
+        "vision drop",
+        "blurred vision",
+        "central blur",
+        "central vision",
+        "distortion",
+        "metamorphopsia",
+        "wavy",
+    )
+    recent_terms = (
+        "today",
+        "yesterday",
+        "new",
+        "acute",
+        "recent",
+        "2 days",
+        "two days",
+        "3 days",
+        "three days",
+        "few days",
+        "this week",
+    )
+    eye_terms = (
+        "right eye",
+        "left eye",
+        "re ",
+        " le ",
+        " r/e",
+        " l/e",
+        "uniocular",
+        "one eye",
+    )
+    return (
+        any(term in text for term in reduced_vision_terms)
+        and any(term in text for term in recent_terms)
+        and any(term in f" {text} " for term in eye_terms)
+    )
+
+
+def text_has_any(text, terms):
+    normalised = normalise_text(text)
+    return any(term in normalised for term in terms)
+
+
+def urgent_image_pathway(result, review):
+    question = result.get("Query", "")
+    image_text = " ".join([
+        str(review.get("image_type", "")),
+        str(review.get("finding_category", "")),
+        str(review.get("brief_image_finding", "")),
+    ])
+    combined = f"{question} {image_text}"
+
+    urgent_rules = [
+        {
+            "id": "image_suspected_wet_amd_convert",
+            "condition": image_review_suggests_macular_fluid(review) and question_suggests_new_reduced_vision(question),
+            "summary": "New unilateral reduced vision with OCT macular fluid is suspicious for active wet AMD/CNV.",
+            "response": (
+                "Thanks for this. Given the fairly new unilateral reduction in vision and the attached OCT macular image showing subretinal/fluid-like change, "
+                "this should be converted to an urgent macula/wet AMD referral pathway. The image is suspicious for active macular pathology such as neovascular/wet AMD or CNV, "
+                "with final diagnosis and treatment decisions to be made by the reviewing clinician/macula service."
+            ),
+            "safety_net": (
+                "Please use the local urgent macula/wet AMD referral pathway for suspected active wet AMD/CNV. "
+                "If symptoms are rapidly worsening or there are additional acute red flags, use the appropriate same-day local ophthalmology route."
+            ),
+            "rationale": "Image-supported suspected active macular pathology: new unilateral reduced vision with OCT macular fluid / suspected wet AMD or CNV.",
+        },
+        {
+            "id": "image_suspected_retinal_detachment_convert",
+            "condition": text_has_any(combined, ("retinal detachment", "detached retina", "retinal tear", "horseshoe tear", "retinal break", "subretinal fluid", "curtain", "shadow"))
+            and text_has_any(combined, ("flashes", "floaters", "curtain", "shadow", "blurred vision", "reduced vision", "new", "sudden")),
+            "summary": "The image/request combination is suspicious for retinal tear or detachment.",
+            "response": (
+                "Thanks for this. The supplied information is suspicious for retinal tear/detachment or another acute posterior segment problem. "
+                "This should be converted to an urgent retinal/ophthalmology referral pathway for same-day or locally appropriate urgent assessment, "
+                "with final diagnosis made after dilated retinal examination/imaging."
+            ),
+            "safety_net": "Please use the local urgent retinal pathway. If there is a curtain/shadow, sudden worsening vision or suspected detachment, do not manage as routine A&G.",
+            "rationale": "Image/text-supported suspected retinal tear or detachment.",
+        },
+        {
+            "id": "image_suspected_papilloedema_convert",
+            "condition": text_has_any(image_text, ("papilloedema", "papilledema", "disc swelling", "swollen disc", "optic nerve swelling"))
+            and text_has_any(combined, ("headache", "vomiting", "transient visual obscuration", "diplopia", "double vision", "pulsatile tinnitus", "reduced vision", "new")),
+            "summary": "Disc swelling with concerning symptoms is suspicious for papilloedema/urgent neuro-ophthalmic pathology.",
+            "response": (
+                "Thanks for this. The image/request combination raises concern for optic disc swelling with potentially significant neuro-ophthalmic symptoms. "
+                "This should be converted to the local urgent neuro-ophthalmology/ophthalmology pathway, with same-day emergency assessment if there are severe headache, vomiting, diplopia, neurological signs or rapidly worsening vision."
+            ),
+            "safety_net": "Please use the local urgent neuro-ophthalmology or emergency pathway if papilloedema is suspected or neurological symptoms are present.",
+            "rationale": "Image/text-supported suspected papilloedema or urgent optic nerve swelling.",
+        },
+        {
+            "id": "image_suspected_corneal_ulcer_convert",
+            "condition": text_has_any(image_text, ("corneal ulcer", "corneal infiltrate", "epithelial defect", "hypopyon", "keratitis"))
+            and text_has_any(combined, ("contact lens", "pain", "photophobia", "red eye", "reduced vision", "discharge")),
+            "summary": "The image/request combination is suspicious for microbial keratitis/corneal ulcer.",
+            "response": (
+                "Thanks for this. The attached image/request combination is suspicious for microbial keratitis or corneal ulcer, particularly if there is pain, photophobia, contact lens wear or reduced vision. "
+                "This should be converted to an urgent cornea/eye-casualty pathway rather than managed as routine advice."
+            ),
+            "safety_net": "Please use the local same-day urgent eye pathway for suspected corneal ulcer/keratitis, especially in contact lens wearers or where vision is reduced.",
+            "rationale": "Image/text-supported suspected microbial keratitis or corneal ulcer.",
+        },
+        {
+            "id": "image_suspected_acute_red_eye_convert",
+            "condition": text_has_any(combined, ("red eye", "pain", "photophobia", "halos", "nausea", "vomiting", "raised iop", "high iop", "hypopyon"))
+            and text_has_any(combined, ("reduced vision", "blurred vision", "severe", "acute", "sudden", "contact lens", "post op", "post-operative", "after cataract")),
+            "summary": "Painful/red eye features with visual change suggest an urgent anterior segment problem.",
+            "response": (
+                "Thanks for this. The supplied information suggests a potentially urgent painful/red-eye presentation with visual change. "
+                "This should be converted to the local urgent ophthalmology/eye-casualty pathway rather than routine advice."
+            ),
+            "safety_net": "Please use the local urgent eye pathway if there is pain, photophobia, red eye with reduced vision, raised IOP symptoms, contact lens keratitis concern or recent post-operative infection concern.",
+            "rationale": "Image/text-supported urgent painful red-eye or anterior segment presentation.",
+        },
+    ]
+
+    for rule in urgent_rules:
+        if rule["condition"]:
+            return rule
+    return None
+
+
 def contextual_request_for_image_case(result):
     missing_info = plain_missing_information_list(result.get("Missing Information", []))
     blocked_terms = (
@@ -759,17 +890,31 @@ def apply_image_review_to_draft(result):
     limitations = str(review.get("limitations", "")).strip()
     details = contextual_request_for_image_case(result)
 
-    if image_review_suggests_macular_fluid(review):
-        draft["Summary"] = "The attached OCT image appears abnormal and needs clinician review in clinical context."
-        draft["Suggested response"] = (
-            "Thanks for this. The attached OCT macular image appears to show an abnormal macular/RPE contour with a fluid-like or hyporeflective change. "
-            "In the right clinical context this could represent active macular pathology, including possible neovascular/wet AMD or CNV, but it cannot be confirmed from this single image alone. "
-            f"Could you send {details}?"
-        )
-        draft["Safety net"] = (
-            "If this is a new symptomatic macular change, new distortion/central blur, reduced vision, or suspected wet AMD/CNV, "
-            "please use the local urgent macula/wet AMD referral pathway rather than waiting for routine advice."
-        )
+    urgent_rule = urgent_image_pathway(result, review)
+    suspected_active_wet_amd = urgent_rule and urgent_rule["id"] == "image_suspected_wet_amd_convert"
+
+    if image_review_suggests_macular_fluid(review) or urgent_rule:
+        if urgent_rule:
+            result["Outcome Recommendation"] = {
+                "Outcome ID": "OUT003",
+                "Outcome": OUTCOME_LABELS["OUT003"],
+                "Rationale": urgent_rule["rationale"],
+            }
+            result["Review Override"] = urgent_rule["id"]
+            draft["Summary"] = urgent_rule["summary"]
+            draft["Suggested response"] = urgent_rule["response"]
+            draft["Safety net"] = urgent_rule["safety_net"]
+        else:
+            draft["Summary"] = "The attached OCT image appears abnormal and needs clinician review in clinical context."
+            draft["Suggested response"] = (
+                "Thanks for this. The attached OCT macular image appears to show an abnormal macular/RPE contour with a fluid-like or hyporeflective change. "
+                "In the right clinical context this could represent active macular pathology, including possible neovascular/wet AMD or CNV, but it cannot be confirmed from this single image alone. "
+                f"Could you send {details}?"
+            )
+            draft["Safety net"] = (
+                "Please use the local urgent macula/wet AMD referral pathway for suspected active wet AMD/CNV. "
+                "If symptoms are rapidly worsening or there are additional acute red flags, use the appropriate same-day local ophthalmology route."
+            )
     else:
         draft["Summary"] = "The attached image has been reviewed and shows a visible finding that needs clinical correlation."
         draft["Suggested response"] = (
@@ -787,10 +932,16 @@ def apply_image_review_to_draft(result):
 
     result["Draft Response"] = draft
     result.setdefault("Audit", {})
-    result["Audit"]["Suggested response confidence"] = "Low"
-    result["Audit"]["Suggested response confidence reason"] = (
-        "Draft incorporates uploaded-image findings, but final interpretation remains clinician-led."
-    )
+    if urgent_rule:
+        result["Audit"]["Suggested response confidence"] = "High"
+        result["Audit"]["Suggested response confidence reason"] = (
+            "Image and request text match an urgent ophthalmology pathway, with final diagnosis clinician-led."
+        )
+    else:
+        result["Audit"]["Suggested response confidence"] = "Low"
+        result["Audit"]["Suggested response confidence reason"] = (
+            "Draft incorporates uploaded-image findings, but final interpretation remains clinician-led."
+        )
     return result
 
 
@@ -884,6 +1035,8 @@ def clinician_review_flags(result):
         return "No", "Glaucoma adherence support advice", "Not required", "Existing pathway"
     if result.get("Review Override") == "suspected_preseptal_cellulitis_more_info":
         return "Optional", "Suspected eyelid cellulitis query needs basic history and examination findings", "Awaiting referrer information", "Existing pathway"
+    if str(result.get("Review Override", "")).startswith("image_suspected_"):
+        return "No", "Image-supported urgent ophthalmology pathway", "Not required", "Existing pathway"
 
     outcome = result.get("Outcome Recommendation", {})
     rationale = outcome.get("Rationale", "")
@@ -2125,6 +2278,7 @@ def main():
             return
 
         result = engine.analyse(cleaned)
+        result["Query"] = cleaned
         result = prepare_result_for_display(cleaned, result)
         if uploaded_image is not None:
             with st.spinner("Reviewing attached image/PDF..."):
