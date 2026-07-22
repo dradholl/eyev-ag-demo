@@ -691,6 +691,109 @@ def image_review_from_result(result):
     return result.get("Image Review", {}) or no_image_review()
 
 
+def image_review_has_usable_finding(review):
+    return (
+        review.get("attached") == "Yes"
+        and not review.get("error")
+        and review.get("image_accessible") == "Yes"
+        and review.get("finding_visible") == "Yes"
+        and bool(str(review.get("brief_image_finding", "")).strip())
+    )
+
+
+def image_review_suggests_macular_fluid(review):
+    text = " ".join([
+        str(review.get("image_type", "")),
+        str(review.get("finding_category", "")),
+        str(review.get("brief_image_finding", "")),
+    ]).lower()
+    macula_context = "oct macula" in text or "macula/oct" in text or "macular" in text
+    fluid_terms = (
+        "fluid",
+        "hyporeflective",
+        "subretinal",
+        "intraretinal",
+        "cyst",
+        "cavity",
+        "ped",
+        "rpe elevation",
+        "cnv",
+        "neovascular",
+        "wet amd",
+    )
+    return macula_context and any(term in text for term in fluid_terms)
+
+
+def contextual_request_for_image_case(result):
+    missing_info = plain_missing_information_list(result.get("Missing Information", []))
+    blocked_terms = (
+        "image",
+        "photo",
+        "oct",
+        "scan",
+    )
+    details = [
+        item
+        for item in missing_info
+        if not any(term in item.lower() for term in blocked_terms)
+    ]
+    if not details:
+        details = [
+            "which eye is affected",
+            "current vision/VA",
+            "symptom duration",
+            "whether there is distortion, central blur or new reduced vision",
+            "fundus findings",
+        ]
+    details.append("any OCT volume/thickness map, fundus image and previous comparison scans if available")
+    return join_plain_request_items(details)
+
+
+def apply_image_review_to_draft(result):
+    review = image_review_from_result(result)
+    if not image_review_has_usable_finding(review):
+        return result
+
+    draft = result.get("Draft Response", {}) or {}
+    finding = str(review.get("brief_image_finding", "")).strip()
+    limitations = str(review.get("limitations", "")).strip()
+    details = contextual_request_for_image_case(result)
+
+    if image_review_suggests_macular_fluid(review):
+        draft["Summary"] = "The attached OCT image appears abnormal and needs clinician review in clinical context."
+        draft["Suggested response"] = (
+            "Thanks for this. The attached OCT macular image appears to show an abnormal macular/RPE contour with a fluid-like or hyporeflective change. "
+            "In the right clinical context this could represent active macular pathology, including possible neovascular/wet AMD or CNV, but it cannot be confirmed from this single image alone. "
+            f"Could you send {details}?"
+        )
+        draft["Safety net"] = (
+            "If this is a new symptomatic macular change, new distortion/central blur, reduced vision, or suspected wet AMD/CNV, "
+            "please use the local urgent macula/wet AMD referral pathway rather than waiting for routine advice."
+        )
+    else:
+        draft["Summary"] = "The attached image has been reviewed and shows a visible finding that needs clinical correlation."
+        draft["Suggested response"] = (
+            f"Thanks for this. The attached image appears to show: {finding} "
+            "This is an image-supported observation rather than a definitive diagnosis. "
+            f"Could you send {details}?"
+        )
+        draft["Safety net"] = (
+            "If there is reduced vision, rapidly worsening symptoms, pain, red eye, neurological symptoms or another red flag, "
+            "please refer urgently using the local ophthalmology pathway rather than waiting for routine advice."
+        )
+
+    if limitations:
+        draft["Suggested response"] += f" Image-review limitation: {limitations}"
+
+    result["Draft Response"] = draft
+    result.setdefault("Audit", {})
+    result["Audit"]["Suggested response confidence"] = "Low"
+    result["Audit"]["Suggested response confidence reason"] = (
+        "Draft incorporates uploaded-image findings, but final interpretation remains clinician-led."
+    )
+    return result
+
+
 def image_review_log_values(result, feedback=None):
     feedback = feedback or {}
     review = image_review_from_result(result)
@@ -2007,7 +2110,11 @@ def main():
         help="Attach an ocular image or PDF if available. Video is outside the current validated image/PDF scope.",
     )
     if uploaded_image is not None and not image_review_enabled():
-        st.info("Image upload is available, but GPT image review needs OPENAI_API_KEY in Streamlit secrets or the environment.")
+        st.info(
+            "Image upload is available, but GPT image review is switched off because "
+            "`OPENAI_API_KEY` is missing. Add it in Streamlit app settings -> Secrets, "
+            "then reboot the app."
+        )
 
     analyse = st.button("Create suggested response", type="primary")
 
@@ -2022,6 +2129,7 @@ def main():
         if uploaded_image is not None:
             with st.spinner("Reviewing attached image/PDF..."):
                 result["Image Review"] = analyse_uploaded_image(cleaned, uploaded_image)
+            result = apply_image_review_to_draft(result)
         else:
             result["Image Review"] = no_image_review()
         st.session_state["last_question"] = cleaned
